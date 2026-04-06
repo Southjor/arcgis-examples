@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>第1课：ArcGIS JS 5.0 环境搭建与第一个三维地图页面</title>
+ 
+ <script type="text/javascript" src="https://openlayers.vip/examples/resources/tianditu.js"></script>
+ <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css">
+ <script type="module" src="https://js.arcgis.com/5.0/"></script>
+
+ <style>
+ body { margin: 0; padding: 0; font-family: "Microsoft YaHei", sans-serif; }
+ #mapContainer { width: 100vw; height: 100vh; }
+ .page-title {
+ position: absolute;
+ top: 20px;
+ left: 50%;
+ transform: translateX(-50%);
+ background-color: rgba(255, 255, 255, 0.8);
+ padding: 8px 20px;
+ border-radius: 4px;
+ font-size: 18px;
+ font-weight: bold;
+ z-index: 100;
+ }
+ </style>
+</head>
+<body>
+ <h1 class="page-title">ArcGIS JS 5.0 第一个三维地图页面</h1>
+ <div id="mapContainer"></div>
+
+ <script type="module">
+ const Map = await $arcgis.import("@arcgis/core/Map.js");
+ const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
+ const WebTileLayer = await $arcgis.import("@arcgis/core/layers/WebTileLayer.js");
+ const TileInfo = await $arcgis.import("@arcgis/core/layers/support/TileInfo.js");
+ 
+ const layers = getTianditu({
+ TileInfo,
+ WebTileLayer,
+ type: 'img_w'
+ });
+
+ const map = new Map({
+ basemap: {
+ baseLayers: [layers.img,layers.cia]
+ },
+ ground: {
+ surface: {
+ elevationLayers: [{
+ url: "https://www.geosceneonline.cn/image/rest/services/OpenData/ChinaTerrain3D/ImageServer/"
+ }]
+ }
+ }
+ });
+
+ const view = new SceneView({
+ container: "mapContainer",
+ map: map,
+ center: [118.805, 34.027],
+ zoom: 13,
+ tilt: 45
+ });
+
+ view.when(() => {
+ console.log("ArcGIS JS 5.0 三维地图加载完成！");
+ alert("三维地图加载成功，可通过鼠标滚轮缩放、拖拽移动地图，按住鼠标右键可调整倾斜角度");
+ }).catch(err => {
+ console.error("三维地图加载失败：", err);
+ alert(`三维地图加载失败，原因：${err.message}`);
+ });
+ </script>
+</body>
+</html>
