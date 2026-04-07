@@ -21,36 +21,46 @@
             font-weight: bold;
             z-index: 100;
         }
-        .controls {
+        .info-panel {
             position: absolute;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(255,255,255,0.9);
-            padding: 10px 20px;
-            border-radius: 4px;
+            top: 70px;
+            right: 20px;
+            background: rgba(255,255,255,0.95);
+            padding: 15px;
+            border-radius: 6px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
             z-index: 100;
-            display: flex;
-            gap: 10px;
+            min-width: 200px;
         }
-        button {
-            padding: 8px 16px;
-            cursor: pointer;
-            background: #1890ff;
-            color: white;
-            border: none;
+        .info-panel h3 { margin: 0 0 10px 0; font-size: 14px; color: #333; }
+        .info-panel p { margin: 5px 0; font-size: 13px; color: #555; }
+        .btn-group { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+        .btn-group button {
+            padding: 5px 12px;
+            border: 1px solid #1890ff;
+            background: #fff;
+            color: #1890ff;
             border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
         }
-        button:hover { background: #40a9ff; }
+        .btn-group button:hover { background: #1890ff; color: #fff; }
     </style>
 </head>
 <body>
-<h1 class="page-title">ArcGIS JS 基础教程（1）：地图初始化</h1>
+<h1 class="page-title">第1课：地图初始化</h1>
 <div id="mapContainer"></div>
-<div class="controls">
-    <button id="switchSatellite">卫星图</button>
-    <button id="switchVector">街道图</button>
-    <button id="switchTerrain">地形图</button>
+
+<div class="info-panel">
+    <h3>🗺️ 地图操作</h3>
+    <p>中心点: <span id="centerDisplay">-118.805, 34.027</span></p>
+    <p>缩放级别: <span id="zoomDisplay">13</span></p>
+    <p>倾斜角度: <span id="tiltDisplay">45°</span></p>
+    <div class="btn-group">
+        <button onclick="zoomIn()">🔍 放大</button>
+        <button onclick="zoomOut()">🔍 缩小</button>
+        <button onclick="resetView()">🏠 重置</button>
+    </div>
 </div>
 
 <script type="module">
@@ -60,9 +70,7 @@
     const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
 
     // 加载影像底图
-    let imgLayers = getTianditu.default({ type: "img_w" });
-    let vecLayers = getTianditu.default({ type: "vec_w" });
-    let terLayers = getTianditu.default({ type: "ter_w" });
+    const imgLayers = getTianditu.default({ type: "img_w" });
 
     const map = new Map({
         basemap: { baseLayers: [imgLayers.base, imgLayers.anno] },
@@ -78,23 +86,37 @@
     const view = new SceneView({
         container: "mapContainer",
         map: map,
-        center: [116.4074, 39.9042],
-        zoom: 12,
+        center: [-118.805, 34.027],
+        zoom: 13,
         tilt: 45
     });
 
-    view.when(() => console.log("三维地图加载完成！"));
+    // 保存初始状态
+    const initState = {
+        center: [-118.805, 34.027],
+        zoom: 13,
+        tilt: 45
+    };
 
-    // 底图切换功能
-    document.getElementById("switchSatellite").onclick = () => {
-        map.basemap = { baseLayers: [imgLayers.base, imgLayers.anno] };
-    };
-    document.getElementById("switchVector").onclick = () => {
-        map.basemap = { baseLayers: [vecLayers.base, vecLayers.anno] };
-    };
-    document.getElementById("switchTerrain").onclick = () => {
-        map.basemap = { baseLayers: [terLayers.base, terLayers.anno] };
-    };
+    // 更新显示信息
+    view.watch("center", () => {
+        const c = view.center;
+        document.getElementById("centerDisplay").textContent = 
+            c ? `${c.longitude.toFixed(3)}, ${c.latitude.toFixed(3)}` : "";
+    });
+    view.watch("zoom", () => {
+        document.getElementById("zoomDisplay").textContent = view.zoom.toFixed(1);
+    });
+    view.watch("tilt", () => {
+        document.getElementById("tiltDisplay").textContent = view.tilt.toFixed(0) + "°";
+    });
+
+    // 控制函数（挂载到全局）
+    window.zoomIn = () => view.goTo({ zoom: view.zoom + 1, animate: true });
+    window.zoomOut = () => view.goTo({ zoom: view.zoom - 1, animate: true });
+    window.resetView = () => view.goTo({ ...initState, animate: true });
+
+    view.when(() => console.log("三维地图加载完成！"));
 </script>
 </body>
 </html>
