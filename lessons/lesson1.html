@@ -1,88 +1,100 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
- <meta charset="UTF-8">
- <meta name="viewport" content="width=device-width, initial-scale=1.0">
- <title>第1课：ArcGIS JS 5.0 环境搭建与第一个三维地图页面</title>
-
- <!-- ESM引入ArcGIS JS 5.0版本样式（固定5.0版本，确保兼容性） -->
- <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css">
- <!-- 补充ArcGIS JS 5.0 JS模块映射，确保ESM引入正常生效 -->
- <script type="module" src="https://js.arcgis.com/5.0/"></script>
- <style>
- /* 基础页面样式，确保地图容器正常显示 */
- body { margin: 0; padding: 0; font-family: "Microsoft YaHei", sans-serif; }
- /* 地图容器占满屏幕高度，宽度100% */
- #mapContainer { width: 100vw; height: 100vh; }
- /* 页面标题样式 */
- .page-title {
- position: absolute;
- top: 20px;
- left: 50%;
- transform: translateX(-50%);
- background-color: rgba(255, 255, 255, 0.8);
- padding: 8px 20px;
- border-radius: 4px;
- font-size: 18px;
- font-weight: bold;
- z-index: 100; /* 确保标题在三维场景上方显示 */
- }
- </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>第1课：地图初始化</title>
+    <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css">
+    <script type="module" src="https://js.arcgis.com/5.0/"></script>
+    <style>
+        body { margin: 0; padding: 0; font-family: "Microsoft YaHei", sans-serif; }
+        #mapContainer { width: 100vw; height: 100vh; }
+        .page-title {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255,255,255,0.9);
+            padding: 8px 20px;
+            border-radius: 4px;
+            font-size: 18px;
+            font-weight: bold;
+            z-index: 100;
+        }
+        .controls {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255,255,255,0.9);
+            padding: 10px 20px;
+            border-radius: 4px;
+            z-index: 100;
+            display: flex;
+            gap: 10px;
+        }
+        button {
+            padding: 8px 16px;
+            cursor: pointer;
+            background: #1890ff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+        }
+        button:hover { background: #40a9ff; }
+    </style>
 </head>
 <body>
-
-<h1 class="page-title">ArcGIS JS 5.0 第一个三维地图页面</h1>
-<!-- 地图容器，三维场景将渲染到这个DOM元素中 -->
+<h1 class="page-title">ArcGIS JS 基础教程（1）：地图初始化</h1>
 <div id="mapContainer"></div>
+<div class="controls">
+    <button id="switchSatellite">卫星图</button>
+    <button id="switchVector">街道图</button>
+    <button id="switchTerrain">地形图</button>
+</div>
 
-<!-- ESM引入ArcGIS JS 5.0核心模块（严格使用5.0版本，模块化引入） -->
 <script type="module">
- // 1. ESM引入ArcGIS JS 5.0所需核心模块（三维地图核心：Map、SceneView）
- // Map：三维地图对象，用于承载基础地图和图层
- // SceneView：三维场景视图对象，用于渲染三维地图并与用户交互
- const Map = await $arcgis.import("@arcgis/core/Map.js");
- const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
- const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
+    const Map = await $arcgis.import("@arcgis/core/Map.js");
+    const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
+    // 引入天地图工具类
+    const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
 
- const layers = getTianditu.default({
- type: 'img_w' // 可选，默认即为 img_w
- });
+    // 加载影像底图
+    let imgLayers = getTianditu.default({ type: "img_w" });
+    let vecLayers = getTianditu.default({ type: "vec_w" });
+    let terLayers = getTianditu.default({ type: "ter_w" });
 
+    const map = new Map({
+        basemap: { baseLayers: [imgLayers.base, imgLayers.anno] },
+        ground: {
+            surface: {
+                elevationLayers: [{
+                    url: "https://www.geosceneonline.cn/image/rest/services/OpenData/ChinaTerrain3D/ImageServer/"
+                }]
+            }
+        }
+    });
 
- // 2. 初始化三维地图对象（Map），三维地图需指定高程服务，提升三维效果
- const map = new Map({
- // 基础地图类型，5.0版本支持多种basemap，如streets、satellite、topo等
- basemap: {
- baseLayers: [layers.img,layers.cia]
- }, // 街道地图，适合基础展示
- // 添加高程服务，实现地形起伏的三维效果（三维地图核心配置）
- ground: {
- surface: {
- elevationLayers: [{
- url: "https://www.geosceneonline.cn/image/rest/services/OpenData/ChinaTerrain3D/ImageServer/"
- }]
- }
- }
- });
+    const view = new SceneView({
+        container: "mapContainer",
+        map: map,
+        center: [116.4074, 39.9042],
+        zoom: 12,
+        tilt: 45
+    });
 
- // 3. 初始化三维场景视图对象（SceneView）
- const view = new SceneView({
- container: "mapContainer", // 绑定地图容器的DOM ID
- map: map, // 关联上面创建的三维地图对象
- center: [118.805, 34.027], // 初始中心点（经纬度，这里是洛杉矶坐标）
- zoom: 13, // 初始缩放级别（1-20，数字越大地图越详细）
- tilt: 45 // 三维倾斜角度（0-90，越大倾斜越明显，凸显三维效果）
- });
+    view.when(() => console.log("三维地图加载完成！"));
 
- // 4. 监听三维场景加载完成事件，确保地图正常渲染
- view.when(() => {
- console.log("ArcGIS JS 5.0 三维地图加载完成！");
- alert("三维地图加载成功，可通过鼠标滚轮缩放、拖拽移动地图，按住鼠标右键可调整倾斜角度");
- }).catch(err => {
- // 异常处理，避免地图加载失败无提示
- console.error("三维地图加载失败：", err);
- alert(`三维地图加载失败，原因：${err.message}`);
- });
+    // 底图切换功能
+    document.getElementById("switchSatellite").onclick = () => {
+        map.basemap = { baseLayers: [imgLayers.base, imgLayers.anno] };
+    };
+    document.getElementById("switchVector").onclick = () => {
+        map.basemap = { baseLayers: [vecLayers.base, vecLayers.anno] };
+    };
+    document.getElementById("switchTerrain").onclick = () => {
+        map.basemap = { baseLayers: [terLayers.base, terLayers.anno] };
+    };
 </script>
 </body>
 </html>
