@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>第2课：地图切换底图</title>
+
+ <!-- ESM引入ArcGIS JS 5.0版本样式 -->
+ <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css">
+ <script type="module" src="https://js.arcgis.com/5.0/"></script>
+ <style>
+ body { margin: 0; padding: 0; font-family: "Microsoft YaHei", sans-serif; }
+ #mapContainer { width: 100vw; height: 100vh; }
+ .page-title {
+ position: absolute;
+ top: 20px;
+ left: 50%;
+ transform: translateX(-50%);
+ background-color: rgba(255, 255, 255, 0.9);
+ padding: 8px 20px;
+ border-radius: 4px;
+ font-size: 18px;
+ font-weight: bold;
+ z-index: 100;
+ }
+ .controls {
+ position: absolute;
+ bottom: 30px;
+ left: 50%;
+ transform: translateX(-50%);
+ background-color: rgba(255, 255, 255, 0.9);
+ padding: 10px 20px;
+ border-radius: 8px;
+ display: flex;
+ gap: 10px;
+ z-index: 100;
+ box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+ }
+ .controls button {
+ padding: 8px 16px;
+ border: none;
+ border-radius: 4px;
+ cursor: pointer;
+ font-size: 14px;
+ transition: all 0.3s;
+ }
+ .btn-streets { background-color: #1890ff; color: white; }
+ .btn-satellite { background-color: #52c41a; color: white; }
+ .btn-terrain { background-color: #fa8c16; color: white; }
+ .controls button:hover { opacity: 0.8; }
+ </style>
+</head>
+<body>
+ <h1 class="page-title">第2课：地图切换底图</h1>
+ <div id="mapContainer"></div>
+ <div class="controls">
+ <button class="btn-streets" id="switchStreets">街道图</button>
+ <button class="btn-satellite" id="switchSatellite">卫星图</button>
+ <button class="btn-terrain" id="switchTerrain">地形图</button>
+ </div>
+ <script type="module">
+ // ESM引入ArcGIS JS 5.0核心模块
+ const Map = await $arcgis.import("@arcgis/core/Map.js");
+ const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
+ const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
+
+ const layers = getTianditu.default({ type: 'img_w' });
+
+ // 初始化三维地图
+ const map = new Map({
+ basemap: { baseLayers: [layers.img, layers.cia] },
+ ground: {
+ surface: {
+ elevationLayers: [{
+ url: "https://www.geosceneonline.cn/image/rest/services/OpenData/ChinaTerrain3D/ImageServer/"
+ }]
+ }
+ }
+ });
+
+ const view = new SceneView({
+ container: "mapContainer",
+ map: map,
+ center: [118.805, 34.027],
+ zoom: 13,
+ tilt: 45
+ });
+
+ // 底图切换功能
+ document.getElementById("switchStreets").onclick = () => {
+ const vecLayers = getTianditu.default({ type: 'vec_w' });
+ map.basemap = { baseLayers: [vecLayers.vec, vecLayers.cva] };
+ };
+
+ document.getElementById("switchSatellite").onclick = () => {
+ const imgLayers = getTianditu.default({ type: 'img_w' });
+ map.basemap = { baseLayers: [imgLayers.img, imgLayers.cia] };
+ };
+
+ document.getElementById("switchTerrain").onclick = () => {
+ const terLayers = getTianditu.default({ type: 'ter_w' });
+ map.basemap = { baseLayers: [terLayers.ter, terLayers.cta] };
+ };
+
+ view.when(() => { console.log("三维地图加载完成！"); });
+ </script>
+</body>
+</html>
