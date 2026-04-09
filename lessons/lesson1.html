@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>第1课：地图初始化（含AMD/ESM两种引入方式）</title>
+    <title>第1课：ArcGIS JS 地图初始化（含AMD/ESM两种引入方式）</title>
     <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css">
     <script type="module" src="https://js.arcgis.com/5.0/"></script>
     <style>
@@ -24,7 +24,7 @@
     </style>
 </head>
 <body>
-<h1 class="page-title">第1课：地图初始化（含AMD/ESM两种引入方式）</h1>
+<h1 class="page-title">ArcGIS JS 地图初始化</h1>
 <div id="mapContainer"></div>
 
 <script type="module">
@@ -50,7 +50,7 @@
     const view = new SceneView({
         container: "mapContainer",
         map: map,
-        center: [-118.805, 34.027],
+        center: [118.805, 34.027],
         zoom: 13,
         tilt: 45
     });
