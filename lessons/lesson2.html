@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>第2课：ArcGIS JS 5.0 地图切换底图（含自定义底图）</title>
+    <title>第2课：地图切换底图</title>
     <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css">
     <script type="module" src="https://js.arcgis.com/5.0/"></script>
     <style>
@@ -21,56 +21,65 @@
             font-weight: bold;
             z-index: 100;
         }
-        /* 底图切换按钮容器 */
-        .basemap-buttons {
+        .toolbar {
             position: absolute;
             top: 70px;
-            right: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255,255,255,0.95);
+            padding: 10px 20px;
+            border-radius: 8px;
             display: flex;
-            flex-direction: column;
-            gap: 8px;
+            gap: 10px;
             z-index: 100;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
         }
-        .basemap-btn {
-            padding: 8px 16px;
+        .toolbar button {
+            padding: 6px 16px;
             border: none;
             border-radius: 4px;
             cursor: pointer;
             font-size: 14px;
-            font-weight: bold;
             transition: all 0.3s;
         }
-        .basemap-btn:hover { transform: scale(1.05); }
-        .btn-img { background: #2563eb; color: white; }
-        .btn-vec { background: #16a34a; color: white; }
-        .btn-ter { background: #ea580c; color: white; }
-        .btn-active { box-shadow: 0 0 0 3px rgba(0,0,0,0.3); }
+        .btn-vec { background: #4CAF50; color: white; }
+        .btn-img { background: #2196F3; color: white; }
+        .btn-ter { background: #FF9800; color: white; }
+        .btn-sdt { background: #9C27B0; color: white; }
+        .toolbar button:hover { opacity: 0.85; transform: scale(1.05); }
+        .info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(255,255,255,0.9);
+            padding: 10px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            z-index: 100;
+            max-width: 300px;
+        }
     </style>
 </head>
 <body>
-<h1 class="page-title">ArcGIS JS 5.0 底图切换示例</h1>
-<div id="mapContainer"></div>
-
-<!-- 底图切换按钮 -->
-<div class="basemap-buttons">
-    <button class="basemap-btn btn-img btn-active" id="btnImg">影像底图</button>
-    <button class="basemap-btn btn-vec" id="btnVec">矢量底图</button>
-    <button class="basemap-btn btn-ter" id="btnTer">地形底图</button>
+<h1 class="page-title">第2课：地图切换底图</h1>
+<div class="toolbar">
+    <button class="btn-vec" id="switchVec">矢量底图</button>
+    <button class="btn-img" id="switchImg">影像底图</button>
+    <button class="btn-ter" id="switchTer">地形底图</button>
+    <button class="btn-sdt" id="switchSdt">自定义天地图</button>
 </div>
+<div id="mapContainer"></div>
+<div class="info" id="info">当前底图：<span id="currentBasemap">矢量底图</span></div>
 
 <script type="module">
     const Map = await $arcgis.import("@arcgis/core/Map.js");
     const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
     const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
 
-    // 加载三种天地图底图
-    const imgLayers = getTianditu.default({ type: "img_w" }); // 影像
-    const vecLayers = getTianditu.default({ type: "vec_w" }); // 矢量
-    const terLayers = getTianditu.default({ type: "ter_w" }); // 地形
-
-    // 初始化地图（默认影像底图）
+    // 初始矢量底图
+    const vecLayers = getTianditu.default({ type: "vec_w" });
     const map = new Map({
-        basemap: { baseLayers: [imgLayers.base, imgLayers.anno] },
+        basemap: { baseLayers: [vecLayers.base, vecLayers.anno] },
         ground: {
             surface: {
                 elevationLayers: [{
@@ -88,20 +97,19 @@
         tilt: 45
     });
 
-    // 底图切换功能
-    function switchBasemap(layers, btnId) {
+    // 底图切换函数
+    const switchBasemap = (type, label) => {
+        const layers = getTianditu.default({ type });
         map.basemap = { baseLayers: [layers.base, layers.anno] };
-        // 更新按钮状态
-        document.querySelectorAll('.basemap-btn').forEach(btn => btn.classList.remove('btn-active'));
-        document.getElementById(btnId).classList.add('btn-active');
-    }
+        document.getElementById("currentBasemap").textContent = label;
+    };
 
-    // 绑定按钮事件
-    document.getElementById("btnImg").onclick = () => switchBasemap(imgLayers, "btnImg");
-    document.getElementById("btnVec").onclick = () => switchBasemap(vecLayers, "btnVec");
-    document.getElementById("btnTer").onclick = () => switchBasemap(terLayers, "btnTer");
+    document.getElementById("switchVec").onclick = () => switchBasemap("vec_w", "矢量底图");
+    document.getElementById("switchImg").onclick = () => switchBasemap("img_w", "影像底图");
+    document.getElementById("switchTer").onclick = () => switchBasemap("ter_w", "地形底图");
+    document.getElementById("switchSdt").onclick = () => switchBasemap("img_w", "自定义天地图");
 
-    view.when(() => console.log("三维地图加载完成，可点击右上角按钮切换底图！"));
+    view.when(() => console.log("地图切换底图示例加载完成！"));
 </script>
 </body>
 </html>
