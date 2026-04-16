@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>第3课：地图缩放、平移、旋转（基础交互）</title>
+    <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css">
+    <script type="module" src="https://js.arcgis.com/5.0/"></script>
+    <style>
+        body { margin: 0; padding: 0; font-family: "Microsoft YaHei", sans-serif; }
+        #mapContainer { width: 100vw; height: 100vh; }
+        .page-title {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255,255,255,0.95);
+            padding: 10px 24px;
+            border-radius: 6px;
+            font-size: 18px;
+            font-weight: bold;
+            z-index: 100;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .control-panel {
+            position: absolute;
+            top: 80px;
+            right: 20px;
+            background: rgba(255,255,255,0.95);
+            padding: 16px;
+            border-radius: 8px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+            z-index: 100;
+            min-width: 180px;
+        }
+        .control-panel h3 {
+            margin: 0 0 12px 0;
+            font-size: 14px;
+            color: #333;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 8px;
+        }
+        .btn-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .btn-group button {
+            padding: 10px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .btn-zoom { background: #1890ff; color: white; }
+        .btn-zoom:hover { background: #40a9ff; }
+        .btn-pan { background: #52c41a; color: white; }
+        .btn-pan:hover { background: #73d13d; }
+        .btn-rotate { background: #722ed1; color: white; }
+        .btn-rotate:hover { background: #9254de; }
+        .btn-reset { background: #ff4d4f; color: white; }
+        .btn-reset:hover { background: #ff7875; }
+        .info-panel {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(255,255,255,0.95);
+            padding: 12px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            z-index: 100;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .info-panel span {
+            display: block;
+            margin: 4px 0;
+        }
+    </style>
+</head>
+<body>
+<h1 class="page-title">第3课：地图缩放、平移、旋转</h1>
+<div id="mapContainer"></div>
+
+<div class="control-panel">
+    <h3>交互控制</h3>
+    <div class="btn-group">
+        <button class="btn-zoom" id="zoomIn">放大一级</button>
+        <button class="btn-zoom" id="zoomOut">缩小一级</button>
+        <button class="btn-pan" id="panToBeijing">定位北京</button>
+        <button class="btn-pan" id="panToShanghai">定位上海</button>
+        <button class="btn-rotate" id="rotateLeft">左旋45度</button>
+        <button class="btn-rotate" id="rotateRight">右旋45度</button>
+        <button class="btn-reset" id="resetView">重置视图</button>
+    </div>
+</div>
+
+<div class="info-panel">
+    <span id="zoomInfo">缩放级别: 13</span>
+    <span id="centerInfo">中心点: 118.805°E, 34.027°N</span>
+    <span id="rotationInfo">旋转角度: 0°</span>
+</div>
+
+<script type="module">
+    const Map = await $arcgis.import("@arcgis/core/Map.js");
+    const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
+    const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
+
+    // 初始状态
+    const initState = {
+        center: [118.805, 34.027],
+        zoom: 13,
+        tilt: 45,
+        heading: 0
+    };
+
+    // 加载天地图矢量底图
+    const vecLayers = getTianditu.default({ type: "vec_w" });
+
+    const map = new Map({
+        basemap: { baseLayers: [vecLayers.base, vecLayers.anno] },
+        ground: {
+            surface: {
+                elevationLayers: [{
+                    url: "https://www.geosceneonline.cn/image/rest/services/OpenData/ChinaTerrain3D/ImageServer/"
+                }]
+            }
+        }
+    });
+
+    const view = new SceneView({
+        container: "mapContainer",
+        map: map,
+        center: initState.center,
+        zoom: initState.zoom,
+        tilt: initState.tilt,
+        heading: initState.heading
+    });
+
+    // 更新信息面板
+    const updateInfo = () => {
+        document.getElementById("zoomInfo").textContent = `缩放级别: ${view.zoom.toFixed(1)}`;
+        document.getElementById("centerInfo").textContent = 
+            `中心点: ${view.center.longitude.toFixed(3)}°E, ${view.center.latitude.toFixed(3)}°N`;
+        document.getElementById("rotationInfo").textContent = `旋转角度: ${(view.heading || 0).toFixed(0)}°`;
+    };
+
+    view.when(() => {
+        console.log("三维地图加载完成！");
+        
+        // 缩放控制
+        document.getElementById("zoomIn").onclick = () => {
+            view.goTo({ zoom: view.zoom + 1 }, { animate: true });
+        };
+        document.getElementById("zoomOut").onclick = () => {
+            view.goTo({ zoom: view.zoom - 1 }, { animate: true });
+        };
+
+        // 平移控制
+        document.getElementById("panToBeijing").onclick = () => {
+            view.goTo({ center: [116.4074, 39.9042], zoom: 14 }, { animate: true });
+        };
+        document.getElementById("panToShanghai").onclick = () => {
+            view.goTo({ center: [121.4737, 31.2304], zoom: 14 }, { animate: true });
+        };
+
+        // 旋转控制
+        document.getElementById("rotateLeft").onclick = () => {
+            view.goTo({ heading: view.heading - 45 }, { animate: true });
+        };
+        document.getElementById("rotateRight").onclick = () => {
+            view.goTo({ heading: view.heading + 45 }, { animate: true });
+        };
+
+        // 重置视图
+        document.getElementById("resetView").onclick = () => {
+            view.goTo({
+                center: initState.center,
+                zoom: initState.zoom,
+                tilt: initState.tilt,
+                heading: initState.heading
+            }, { animate: true });
+        };
+
+        // 监听视图变化，实时更新信息
+        view.watch("zoom", updateInfo);
+        view.watch("center", updateInfo);
+        view.watch("heading", updateInfo);
+        
+        updateInfo();
+    });
+</script>
+</body>
+</html>
