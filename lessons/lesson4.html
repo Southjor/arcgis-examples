@@ -77,7 +77,6 @@
         <h3>地图定位控制</h3>
         <div class="btn-group">
             <button class="btn-lnglat" onclick="goToLngLat()">📍 指定经纬度定位</button>
-            <button class="btn-address" onclick="goToAddress()">🏠 地址名称定位</button>
             <button class="btn-combo" onclick="goToComposite()">🚀 复合参数定位</button>
         </div>
         <div class="info-box" id="infoBox">
@@ -90,7 +89,6 @@
     <script type="module">
         const Map = await $arcgis.import("esri/Map");
         const SceneView = await $arcgis.import("esri/views/SceneView");
-        const Locator = await $arcgis.import("esri/tasks/Locator");
         const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
 
         // 加载天地图底图
@@ -107,12 +105,7 @@
             tilt: 45
         });
 
-        // 地理编码服务
-        const locator = new Locator({
-            url: "https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer"
-        });
-
-        // 显示当前中心点信息
+        // 加载天地图底图
         view.watch("center", (newCenter) => {
             const infoBox = document.getElementById("infoBox");
             if (newCenter) {
@@ -128,23 +121,7 @@
             });
         };
 
-        // 方式2：通过地址名称定位（地理编码）
-        window.goToAddress = function() {
-            const address = "北京市朝阳区大望路";
-            locator.locationToAddress(address)
-                .then((candidate) => {
-                    view.goTo({
-                        target: candidate.location,
-                        zoom: 16
-                    });
-                })
-                .catch((err) => {
-                    console.error("地址解析失败:", err);
-                    alert("地址解析失败，请检查地址是否正确");
-                });
-        };
-
-        // 方式3：复合参数定位（中心点+缩放+倾斜+方位角）
+        // 方式2：复合参数定位（中心点+缩放+倾斜+方位角）
         window.goToComposite = function() {
             view.goTo({
                 center: [104.065, 30.659], // 成都
