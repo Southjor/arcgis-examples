@@ -10,150 +10,127 @@
         body { margin: 0; padding: 0; font-family: "Microsoft YaHei", sans-serif; }
         #mapContainer { width: 100vw; height: 100vh; }
         .page-title {
-            position: absolute;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(255,255,255,0.9);
-            padding: 8px 20px;
-            border-radius: 4px;
-            font-size: 18px;
-            font-weight: bold;
-            z-index: 100;
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(255,255,255,0.95); padding: 10px 24px; border-radius: 6px;
+            font-size: 18px; font-weight: bold; z-index: 100;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
         }
         .control-panel {
-            position: absolute;
-            top: 80px;
-            right: 20px;
-            background: rgba(255,255,255,0.95);
-            padding: 16px;
-            border-radius: 8px;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.15);
-            z-index: 100;
-            min-width: 220px;
+            position: absolute; top: 80px; right: 20px;
+            background: rgba(255,255,255,0.95); padding: 16px; border-radius: 8px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15); z-index: 100; min-width: 200px;
         }
-        .control-panel h3 {
-            margin: 0 0 12px 0;
-            font-size: 14px;
-            color: #333;
-            border-bottom: 1px solid #eee;
-            padding-bottom: 8px;
-        }
-        .btn-group {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
+        .control-panel h3 { margin: 0 0 12px 0; font-size: 14px; border-bottom: 1px solid #eee; padding-bottom: 8px; }
+        .btn-group { display: flex; flex-direction: column; gap: 8px; }
         .btn-group button {
-            padding: 8px 12px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 13px;
-            font-weight: bold;
-            transition: background 0.2s;
+            padding: 10px 16px; border: none; border-radius: 4px;
+            cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.2s;
         }
-        .btn-lnglat { background: #0079c1; color: #fff; }
-        .btn-lnglat:hover { background: #005a87; }
-        .btn-address { background: #4caf50; color: #fff; }
-        .btn-address:hover { background: #388e3c; }
-        .btn-combo { background: #ff9800; color: #fff; }
-        .btn-combo:hover { background: #f57c00; }
-        .info-box {
-            margin-top: 12px;
-            padding: 10px;
-            background: #f5f5f5;
-            border-radius: 4px;
-            font-size: 12px;
-            color: #666;
-            line-height: 1.6;
+        .btn-loc { background: #1890ff; color: white; }
+        .btn-loc:hover { background: #40a9ff; }
+        .btn-geo { background: #52c41a; color: white; }
+        .btn-geo:hover { background: #73d13d; }
+        .btn-reset { background: #ff4d4f; color: white; }
+        .btn-reset:hover { background: #ff7875; }
+        .search-box { display: flex; gap: 6px; margin-top: 8px; }
+        .search-box input {
+            flex: 1; padding: 8px 10px; border: 1px solid #ddd; border-radius: 4px;
+            font-size: 13px; outline: none;
         }
+        .search-box input:focus { border-color: #1890ff; }
+        .search-box button { padding: 8px 12px; border: none; border-radius: 4px; background: #faad14; color: white; cursor: pointer; font-size: 13px; }
+        .info-panel {
+            position: absolute; bottom: 20px; left: 20px;
+            background: rgba(255,255,255,0.95); padding: 12px 16px; border-radius: 6px;
+            font-size: 13px; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            min-width: 250px;
+        }
+        .info-panel span { display: block; margin: 3px 0; }
     </style>
 </head>
 <body>
-    <h1 class="page-title">第4课：地图中心点定位</h1>
+<h1 class="page-title">第4课：地图中心点定位（指定经纬度/地址）</h1>
+<div id="mapContainer"></div>
 
-    <div class="control-panel">
-        <h3>地图定位控制</h3>
-        <div class="btn-group">
-            <button class="btn-lnglat" onclick="goToLngLat()">📍 指定经纬度定位</button>
-            <button class="btn-address" onclick="goToAddress()">🏠 地址名称定位（北京市朝阳区大望路）</button>
-            <button class="btn-combo" onclick="goToComposite()">🚀 复合参数定位</button>
+<div class="control-panel">
+    <h3>快捷定位</h3>
+    <div class="btn-group">
+        <button class="btn-loc" id="locateBeijing">定位北京</button>
+        <button class="btn-loc" id="locateShanghai">定位上海</button>
+        <button class="btn-loc" id="locateGuangzhou">定位广州</button>
+        <button class="btn-geo" id="locateTiananmen">定位天安门广场</button>
+        <div class="search-box">
+            <input type="text" id="addressInput" placeholder="输入地址搜索...">
+            <button id="searchBtn">搜索</button>
         </div>
-        <div class="info-box" id="infoBox">
-            当前中心点将显示在这里
-        </div>
+        <button class="btn-reset" id="resetView">重置视图</button>
     </div>
+</div>
 
-    <div id="mapContainer"></div>
+<div class="info-panel">
+    <span id="centerInfo">中心点: 118.805E, 34.027N</span>
+    <span id="zoomInfo">缩放级别: 13</span>
+    <span id="locateStatus" style="color:#1890ff;">就绪</span>
+</div>
 
-    <script type="module">
-        const Map = await $arcgis.import("esri/Map");
-        const SceneView = await $arcgis.import("esri/views/SceneView");
-        const locator = await $arcgis.import("esri/rest/locator");
-        const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
+<script type="module">
+    const Map = await $arcgis.import("@arcgis/core/Map.js");
+    const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
+    const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
 
-        // 加载天地图底图
-        const imgLayers = getTianditu.default({ type: "img_w" });
-        const map = new Map({
-            basemap: { baseLayers: [imgLayers.base, imgLayers.anno] }
-        });
+    const initState = { center: [118.805, 34.027], zoom: 13, tilt: 45 };
+    const vecLayers = getTianditu.default({ type: "vec_w" });
 
-        const view = new SceneView({
-            container: "mapContainer",
-            map: map,
-            center: [116.397, 39.909], // 北京天安门
-            zoom: 10,
-            tilt: 45
-        });
+    const map = new Map({
+        basemap: { baseLayers: [vecLayers.base, vecLayers.anno] },
+        ground: { surface: { elevationLayers: [{ url: "https://www.geosceneonline.cn/image/rest/services/OpenData/ChinaTerrain3D/ImageServer/" }] } }
+    });
 
-        // 加载天地图底图
-        view.watch("center", (newCenter) => {
-            const infoBox = document.getElementById("infoBox");
-            if (newCenter) {
-                infoBox.innerHTML = "经度: " + newCenter.longitude.toFixed(4) + "<br>纬度: " + newCenter.latitude.toFixed(4);
-            }
-        });
+    const view = new SceneView({
+        container: "mapContainer", map: map,
+        center: initState.center, zoom: initState.zoom, tilt: initState.tilt
+    });
 
-        // 方式1：直接指定经纬度
-        window.goToLngLat = function() {
-            view.goTo({
-                center: [121.473, 31.230], // 上海
-                zoom: 13
-            });
+    // 经纬度定位
+    const locateByLatLng = (lng, lat, label) => {
+        view.goTo({ center: [lng, lat], zoom: 14 });
+        document.getElementById("locateStatus").textContent = "已定位: " + label;
+    };
+
+    // 地址定位（使用天地图地理编码）
+    const locateByAddress = async (address) => {
+        try {
+            const res = await fetch("https://api.tianditu.gov.cn/geocoder?ds={"keyWord":"' + address + '"}&tk=your_tk");
+            document.getElementById("locateStatus").textContent = "搜索: " + address;
+        } catch (e) {
+            document.getElementById("locateStatus").textContent = "地址解析需要有效token";
+        }
+    };
+
+    view.when(() => {
+        document.getElementById("locateBeijing").onclick = () => locateByLatLng(116.4074, 39.9042, "北京");
+        document.getElementById("locateShanghai").onclick = () => locateByLatLng(121.4737, 31.2304, "上海");
+        document.getElementById("locateGuangzhou").onclick = () => locateByLatLng(113.2644, 23.1291, "广州");
+        document.getElementById("locateTiananmen").onclick = () => {
+            locateByLatLng(116.3974, 39.9087, "天安门广场");
         };
-
-        // 方式2：通过地址名称定位（正向地理编码）
-        window.goToAddress = function() {
-            const url = "https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer";
-            locator.addressToLocations(url, {
-                address: { SingleLine: "北京市朝阳区大望路" }
-            }).then((candidates) => {
-                if (candidates.length > 0) {
-                    view.goTo({
-                        target: candidates[0].location,
-                        zoom: 16
-                    });
-                }
-            }).catch((err) => {
-                console.error("地址解析失败:", err);
-                alert("地址解析失败，请检查地址是否正确");
-            });
+        document.getElementById("searchBtn").onclick = () => {
+            const addr = document.getElementById("addressInput").value;
+            if (addr) locateByAddress(addr);
         };
-
-        // 方式3：复合参数定位（中心点+缩放+倾斜+方位角）
-        window.goToComposite = function() {
-            view.goTo({
-                center: [104.065, 30.659], // 成都
-                zoom: 12,
-                tilt: 60,
-                heading: 45
-            });
-        };
-
-        view.when(() => {
-            console.log("三维地图加载完成！");
+        document.getElementById("addressInput").addEventListener("keydown", (e) => {
+            if (e.key === "Enter") document.getElementById("searchBtn").click();
         });
-    </script>
+        document.getElementById("resetView").onclick = () => view.goTo(initState);
+
+        view.watch("center", () => {
+            document.getElementById("centerInfo").textContent =
+                "中心点: " + view.center.longitude.toFixed(3) + "E, " + view.center.latitude.toFixed(3) + "N";
+        });
+        view.watch("zoom", () => {
+            document.getElementById("zoomInfo").textContent = "缩放级别: " + view.zoom.toFixed(1);
+        });
+    });
+</script>
 </body>
 </html>
