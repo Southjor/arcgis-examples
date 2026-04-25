@@ -133,13 +133,13 @@
     function updateMeasurement(vertices, type) {
         if (!vertices || vertices.length < 2) return;
 
-        // 先计算测量值
-        let lengthKm = 0, areaSqKm = 0, perimeterKm = 0;
         // 创建几何图形
         const geom = type === "polyline"
             ? { type: "polyline", paths: [vertices] }
             : { type: "polygon", rings: [vertices] };
 
+        // 计算测量值
+        let lengthKm = 0, areaSqKm = 0, perimeterKm = 0;
         if (type === "polyline") {
             lengthKm = geometryEngine.geodesicLength(geom, "kilometers");
         } else {
@@ -158,23 +158,44 @@
         });
         graphicsLayer.add(graphic);
 
-        // 用 Graphic 在线上/面上方显示文字标注
-        const labelGeom = type === "polyline"
-            ? { type: "point", longitude: vertices[vertices.length - 1][0], latitude: vertices[vertices.length - 1][1], z: 100 }
-            : { type: "point", longitude: geom.centroid.longitude, latitude: geom.centroid.latitude, z: 100 };
+        // 在3D场景中使用 PointSymbol3D + IconSymbol3DLayer 显示文字标注
+        // 计算标注位置
+        let labelLongitude, labelLatitude;
+        if (type === "polyline") {
+            labelLongitude = vertices[vertices.length - 1][0];
+            labelLatitude = vertices[vertices.length - 1][1];
+        } else {
+            // 计算多边形中心点
+            let sumX = 0, sumY = 0;
+            vertices.forEach(v => { sumX += v[0]; sumY += v[1]; });
+            labelLongitude = sumX / vertices.length;
+            labelLatitude = sumY / vertices.length;
+        }
 
+        const labelText = type === "polyline"
+            ? lengthKm.toFixed(2) + " km"
+            : areaSqKm.toFixed(2) + " km²";
+
+        // 使用 PointSymbol3D + IconSymbol3DLayer 作为文字标注的替代方案
         const labelGraphic = new Graphic({
-            geometry: labelGeom,
+            geometry: { type: "point", longitude: labelLongitude, latitude: labelLatitude, z: 100 },
             symbol: {
-                type: "label-3d",
+                type: "point-3d",
                 symbolLayers: [{
-                    type: "text",
-                    material: { color: [0, 0, 0] },
-                    halo: { color: [255, 255, 255], size: 2 },
-                    text: type === "polyline" ? lengthKm.toFixed(2) + " km" : areaSqKm.toFixed(2) + " km²",
-                    font: { size: 14 }
-                }]
-            }
+                    type: "icon",
+                    resource: { primitive: "circle" },
+                    material: { color: [255, 255, 255, 0.9] },
+                    size: 12,
+                    outline: { color: [0, 121, 193, 1], size: 1 }
+                }],
+                verticalOffset: { screenLength: 40 },
+                callout: {
+                    type: "line",
+                    size: 1,
+                    color: [0, 121, 193, 0.8]
+                }
+            },
+            attributes: { label: labelText }
         });
         graphicsLayer.add(labelGraphic);
 
