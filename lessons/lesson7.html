@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>第7课：测量工具（距离/面积量算）</title>
+    <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css">
+    <script type="module" src="https://js.arcgis.com/5.0/"></script>
+    <style>
+        body { margin: 0; padding: 0; font-family: "Microsoft YaHei", sans-serif; }
+        #mapContainer { width: 100vw; height: 100vh; }
+        .toolbar {
+            position: absolute; top: 20px; left: 20px; z-index: 100;
+            background: rgba(255,255,255,0.95); padding: 12px 16px;
+            border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+        }
+        .toolbar button {
+            padding: 8px 16px; margin-right: 8px; border: none;
+            border-radius: 4px; cursor: pointer; font-size: 14px;
+            background: #0079c1; color: white; transition: all 0.2s;
+        }
+        .toolbar button:hover { background: #005a8c; }
+        .toolbar button.active { background: #e64a19; }
+        .toolbar button:last-child { margin-right: 0; }
+        .measure-info {
+            position: absolute; bottom: 20px; left: 20px; z-index: 100;
+            background: rgba(255,255,255,0.95); padding: 12px 16px;
+            border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+            max-width: 280px; font-size: 13px;
+        }
+        .measure-info h4 { margin: 0 0 8px 0; color: #333; font-size: 14px; }
+        .measure-info p { margin: 4px 0; color: #333; line-height: 1.6; }
+    </style>
+</head>
+<body>
+<div class="toolbar">
+    <button id="btnDistance">📏 距离测量</button>
+    <button id="btnArea">📐 面积测量</button>
+    <button id="btnClear">🗑️ 清除</button>
+</div>
+<div class="measure-info">
+    <h4>📊 测量结果</h4>
+    <p id="resultText">点击上方按钮开始测量</p>
+</div>
+<div id="mapContainer"></div>
+
+<script type="module">
+    const Map = await $arcgis.import("@arcgis/core/Map.js");
+    const MapView = await $arcgis.import("@arcgis/core/views/MapView.js");
+    const Graphic = await $arcgis.import("@arcgis/core/Graphic.js");
+    const GraphicsLayer = await $arcgis.import("@arcgis/core/layers/GraphicsLayer.js");
+    const Draw = await $arcgis.import("@arcgis/core/views/draw/Draw.js");
+    const geometryEngine = await $arcgis.import("@arcgis/core/geometry/geometryEngine.js");
+    const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
+
+    // 获取天地图底图
+    const vecLayers = getTianditu.default({ type: "vec_w" });
+
+    // 创建地图
+    const map = new Map({
+        basemap: { baseLayers: [vecLayers.base, vecLayers.anno] }
+    });
+
+    // 创建MapView
+    const view = new MapView({
+        container: "mapContainer",
+        map: map,
+        center: [116.4074, 39.9042],
+        zoom: 12
+    });
+
+    // 创建GraphicsLayer
+    const graphicsLayer = new GraphicsLayer();
+    map.add(graphicsLayer);
+
+    // 创建Draw实例
+    const draw = new Draw({ view: view });
+
+    // 测量状态
+    let activeAction = null;
+
+    // 距离测量
+    document.getElementById("btnDistance").addEventListener("click", () => {
+        clearActiveButton();
+        document.getElementById("btnDistance").classList.add("active");
+        document.getElementById("resultText").textContent = "🖱️ 在地图上点击绘制折线，双击结束";
+        activeAction = "distance";
+        startDrawing("polyline");
+    });
+
+    // 面积测量
+    document.getElementById("btnArea").addEventListener("click", () => {
+        clearActiveButton();
+        document.getElementById("btnArea").classList.add("active");
+        document.getElementById("resultText").textContent = "🖱️ 在地图上点击绘制多边形，双击结束";
+        activeAction = "area";
+        startDrawing("polygon");
+    });
+
+    // 清除
+    document.getElementById("btnClear").addEventListener("click", () => {
+        graphicsLayer.removeAll();
+        clearActiveButton();
+        document.getElementById("resultText").textContent = "点击上方按钮开始测量";
+        activeAction = null;
+        draw.reset();
+    });
+
+    function clearActiveButton() {
+        document.querySelectorAll(".toolbar button").forEach(btn => btn.classList.remove("active"));
+    }
+
+    // 开始绘制
+    function startDrawing(type) {
+        draw.reset();
+        const action = type === "polyline" ? draw.create("polyline") : draw.create("polygon");
+
+        action.on("vertex-add", (evt) => {
+            updateMeasurement(evt.vertices, type);
+        });
+        action.on("cursor-update", (evt) => {
+            updateMeasurement(evt.vertices, type);
+        });
+        action.on("draw-complete", (evt) => {
+            updateMeasurement(evt.vertices, type);
+            clearActiveButton();
+        });
+    }
+
+    // 更新测量结果
+    function updateMeasurement(vertices, type) {
+        if (!vertices || vertices.length < 2) return;
+
+        graphicsLayer.removeAll();
+
+        // 创建几何图形
+        const geom = type === "polyline"
+            ? { type: "polyline", paths: [vertices] }
+            : { type: "polygon", rings: [vertices] };
+
+        // 添加测量图形
+        const graphic = new Graphic({
+            geometry: geom,
+            symbol: type === "polyline"
+                ? { type: "simple-line", color: [0, 121, 193, 1], width: 3, style: "solid" }
+                : { type: "simple-fill", color: [0, 121, 193, 0.3], outline: { color: [0, 121, 193, 1], width: 2 } }
+        });
+        graphicsLayer.add(graphic);
+
+        // 计算测量值
+        let result = "";
+        if (type === "polyline") {
+            const lengthKm = geometryEngine.geodesicLength(geom, "kilometers");
+            result = `📏 总距离：<strong>${lengthKm.toFixed(2)} 公里</strong><br>📍 节点数：${vertices.length}`;
+        } else {
+            const areaSqKm = geometryEngine.geodesicArea(geom, "square-kilometers");
+            const perimeterKm = geometryEngine.geodesicLength(geom, "kilometers");
+            result = `📐 面积：<strong>${areaSqKm.toFixed(2)} 平方公里</strong><br>📏 周长：${perimeterKm.toFixed(2)} 公里<br>📍 节点数：${vertices.length}`;
+        }
+
+        document.getElementById("resultText").innerHTML = result;
+    }
+
+    view.when(() => {
+        console.log("第7课：测量工具加载完成！");
+    });
+</script>
+</body>
+</html>
