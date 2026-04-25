@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>第7课：测量工具（距离/面积量算）</title>
-    <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css">
-    <script type="module" src="https://js.arcgis.com/5.0/"></script>
+    <link rel="stylesheet" href="https://js.arcgis.com/4.32/esri/themes/light/main.css">
+    <script type="module" src="https://js.arcgis.com/4.32/"></script>
     <style>
         body { margin: 0; padding: 0; font-family: "Microsoft YaHei", sans-serif; }
         #mapContainer { width: 100vw; height: 100vh; }
@@ -46,7 +46,7 @@
 
 <script type="module">
     const Map = await $arcgis.import("@arcgis/core/Map.js");
-    const MapView = await $arcgis.import("@arcgis/core/views/MapView.js");
+    const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
     const Graphic = await $arcgis.import("@arcgis/core/Graphic.js");
     const GraphicsLayer = await $arcgis.import("@arcgis/core/layers/GraphicsLayer.js");
     const Draw = await $arcgis.import("@arcgis/core/views/draw/Draw.js");
@@ -61,12 +61,14 @@
         basemap: { baseLayers: [vecLayers.base, vecLayers.anno] }
     });
 
-    // 创建MapView
-    const view = new MapView({
+    // 创建SceneView（三维）
+    const view = new SceneView({
         container: "mapContainer",
         map: map,
-        center: [116.4074, 39.9042],
-        zoom: 12
+        camera: {
+            position: { longitude: 116.4074, latitude: 39.9042, z: 5000 },
+            tilt: 60
+        }
     });
 
     // 创建GraphicsLayer
@@ -131,30 +133,56 @@
     function updateMeasurement(vertices, type) {
         if (!vertices || vertices.length < 2) return;
 
-        graphicsLayer.removeAll();
-
+        // 先计算测量值
+        let lengthKm = 0, areaSqKm = 0, perimeterKm = 0;
         // 创建几何图形
         const geom = type === "polyline"
             ? { type: "polyline", paths: [vertices] }
             : { type: "polygon", rings: [vertices] };
 
-        // 添加测量图形
+        if (type === "polyline") {
+            lengthKm = geometryEngine.geodesicLength(geom, "kilometers");
+        } else {
+            areaSqKm = geometryEngine.geodesicArea(geom, "square-kilometers");
+            perimeterKm = geometryEngine.geodesicLength(geom, "kilometers");
+        }
+
+        graphicsLayer.removeAll();
+
+        // 添加测量图形（三维下用3D符号）
         const graphic = new Graphic({
             geometry: geom,
             symbol: type === "polyline"
-                ? { type: "simple-line", color: [0, 121, 193, 1], width: 3, style: "solid" }
-                : { type: "simple-fill", color: [0, 121, 193, 0.3], outline: { color: [0, 121, 193, 1], width: 2 } }
+                ? { type: "line-3d", symbolLayers: [{ type: "line", size: 3, material: { color: [0, 121, 193, 1] } }] }
+                : { type: "polygon-3d", symbolLayers: [{ type: "fill", material: { color: [0, 121, 193, 0.3] }, outline: { color: [0, 121, 193, 1], size: 2 } }] }
         });
         graphicsLayer.add(graphic);
 
-        // 计算测量值
+        // 用 Graphic 在线上/面上方显示文字标注
+        const labelGeom = type === "polyline"
+            ? { type: "point", longitude: vertices[vertices.length - 1][0], latitude: vertices[vertices.length - 1][1], z: 100 }
+            : { type: "point", longitude: geom.centroid.longitude, latitude: geom.centroid.latitude, z: 100 };
+
+        const labelGraphic = new Graphic({
+            geometry: labelGeom,
+            symbol: {
+                type: "label-3d",
+                symbolLayers: [{
+                    type: "text",
+                    material: { color: [0, 0, 0] },
+                    halo: { color: [255, 255, 255], size: 2 },
+                    text: type === "polyline" ? lengthKm.toFixed(2) + " km" : areaSqKm.toFixed(2) + " km²",
+                    font: { size: 14 }
+                }]
+            }
+        });
+        graphicsLayer.add(labelGraphic);
+
+        // 更新结果面板
         let result = "";
         if (type === "polyline") {
-            const lengthKm = geometryEngine.geodesicLength(geom, "kilometers");
             result = `📏 总距离：<strong>${lengthKm.toFixed(2)} 公里</strong><br>📍 节点数：${vertices.length}`;
         } else {
-            const areaSqKm = geometryEngine.geodesicArea(geom, "square-kilometers");
-            const perimeterKm = geometryEngine.geodesicLength(geom, "kilometers");
             result = `📐 面积：<strong>${areaSqKm.toFixed(2)} 平方公里</strong><br>📏 周长：${perimeterKm.toFixed(2)} 公里<br>📍 节点数：${vertices.length}`;
         }
 
