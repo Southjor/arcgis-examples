@@ -23,7 +23,7 @@
 
 <script type="module">
     const Map = await $arcgis.import("@arcgis/core/Map.js");
-    const MapView = await $arcgis.import("@arcgis/core/views/MapView.js");
+    const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
     const Graphic = await $arcgis.import("@arcgis/core/Graphic.js");
     const GraphicsLayer = await $arcgis.import("@arcgis/core/layers/GraphicsLayer.js");
     const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
@@ -36,12 +36,20 @@
         basemap: { baseLayers: [vecLayers.base, vecLayers.anno] }
     });
 
-    // 创建MapView（2D视图，原生支持popup和constraints）
-    const view = new MapView({
+    // 创建SceneView（3D视图）
+    const view = new SceneView({
         container: "mapContainer",
         map: map,
-        center: [116.4074, 39.9042],
-        zoom: 12,
+        viewingMode: "global",
+        camera: {
+            position: {
+                longitude: 116.4074,
+                latitude: 39.9042,
+                z: 1500
+            },
+            tilt: 45,
+            heading: 0
+        },
         popup: {
             dockEnabled: true,
             dockOptions: {
