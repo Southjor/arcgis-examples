@@ -64,6 +64,7 @@
     const Map = await $arcgis.import("@arcgis/core/Map.js");
     const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
     const Polygon = await $arcgis.import("@arcgis/core/geometry/Polygon.js");
+    const Extent = await $arcgis.import("@arcgis/core/geometry/Extent.js");
     const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
 
     const initState = { center: [116.4074, 39.9042], zoom: 12, minZoom: 2, maxZoom: 18 };
@@ -77,11 +78,24 @@
     const view = new SceneView({
         container: "mapContainer", map: map,
         center: initState.center, zoom: initState.zoom,
-        constraints: { minZoom: initState.minZoom, maxZoom: initState.maxZoom },
+        constraints: { 
+            minZoom: initState.minZoom, 
+            maxZoom: initState.maxZoom,
+            rotationEnabled: false  // 禁止旋转
+        },
         tilt: 45
     });
 
     // 北京范围（示例坐标，实际范围可调整）
+    const beijingExtent = {
+        xmin: 115.7,
+        ymin: 39.4,
+        xmax: 117.5,
+        ymax: 41.6,
+        spatialReference: { wkid: 4326 }
+    };
+
+    // 创建限制范围的多边形（用于显示）
     const beijingGeometry = new Polygon({
         rings: [[
             [115.7, 39.4], [117.5, 39.4],
@@ -91,32 +105,76 @@
         spatialReference: { wkid: 4326 }
     });
 
+    // 限制状态
+    let isConstrained = false;
+    let constraintExtent = null;
+
     // 设置限制
     const applyConstraints = () => {
-        view.constraints = {
-            minZoom: 10,
-            maxZoom: 16,
-            geometry: beijingGeometry,
-            rotationEnabled: false // 禁止旋转
-        };
-        view.goTo(beijingGeometry);
+        isConstrained = true;
+        constraintExtent = beijingExtent;
+        
+        // 立即检查并调整视图
+        checkAndResetView();
+        
         document.getElementById("statusInfo").textContent = "已限制（北京范围）";
         document.getElementById("statusInfo").className = "status status-limited";
         document.getElementById("extentInfo").textContent = "北京市范围";
+        
+        console.log("已设置限制：北京范围");
     };
 
     // 清除限制
     const clearConstraints = () => {
-        view.constraints = {
-            minZoom: initState.minZoom,
-            maxZoom: initState.maxZoom,
-            rotationEnabled: true
-        };
-        view.goTo({ center: initState.center, zoom: initState.zoom });
+        isConstrained = false;
+        constraintExtent = null;
+        
         document.getElementById("statusInfo").textContent = "正常";
         document.getElementById("statusInfo").className = "status status-normal";
         document.getElementById("extentInfo").textContent = "全国视图";
+        
+        console.log("已清除限制");
     };
+
+    // 检查并重置视图（核心限制逻辑）
+    const checkAndResetView = () => {
+        if (!isConstrained || !constraintExtent) return;
+        
+        const currentExtent = view.extent;
+        if (!currentExtent) return;
+        
+        // 检查是否超出范围
+        const isOutOfExtent = 
+            currentExtent.xmin < constraintExtent.xmin ||
+            currentExtent.xmax > constraintExtent.xmax ||
+            currentExtent.ymin < constraintExtent.ymin ||
+            currentExtent.ymax > constraintExtent.ymax;
+        
+        // 检查缩放级别（使用scale作为替代，因为SceneView没有直接的zoom属性）
+        const currentScale = view.scale;
+        const minScale = 5000;   // 对应zoom约16
+        const maxScale = 500000; // 对应zoom约10
+        
+        const isOutOfScale = currentScale < minScale || currentScale > maxScale;
+        
+        if (isOutOfExtent || isOutOfScale) {
+            console.log("超出限制，重置视图...");
+            
+            // 重置到北京中心
+            view.goTo({
+                center: [116.4074, 39.9042],
+                scale: 100000  // 对应zoom约12
+            });
+        }
+    };
+
+    // 监听视图更新（核心：SceneView限制的标准做法）
+    view.watch("updating", (value) => {
+        if (!value) {
+            // 视图停止更新时检查约束
+            checkAndResetView();
+        }
+    });
 
     view.when(() => {
         document.getElementById("setConstraint").onclick = applyConstraints;
