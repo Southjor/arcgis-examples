@@ -63,7 +63,7 @@
 <script type="module">
     const Map = await $arcgis.import("@arcgis/core/Map.js");
     const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
-    const Polygon = await $arcgis.import("@arcgis/geometry/Polygon.js");
+    const Polygon = await $arcgis.import("@arcgis/core/geometry/Polygon.js");
     const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
 
     const initState = { center: [116.4074, 39.9042], zoom: 12, minZoom: 2, maxZoom: 18 };
