@@ -24,262 +24,204 @@
         .control-panel {
             position: absolute;
             top: 70px;
-            right: 20px;
-            background: rgba(255,255,255,0.95);
+            left: 20px;
+            background: white;
             padding: 15px;
-            border-radius: 6px;
+            border-radius: 8px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.2);
             z-index: 100;
-            width: 260px;
-        }
-        .control-panel h3 {
-            margin: 0 0 10px 0;
-            font-size: 14px;
-            color: #333;
-        }
-        .control-panel label {
-            display: block;
-            margin: 8px 0 4px 0;
-            font-size: 12px;
-            color: #666;
-        }
-        .control-panel input {
-            width: 100%;
-            padding: 6px 8px;
-            border: 1px solid #ddd;
-            border-radius: 3px;
-            font-size: 13px;
-            box-sizing: border-box;
         }
         .control-panel button {
-            width: 100%;
-            padding: 8px;
-            margin-top: 10px;
-            border: none;
-            border-radius: 3px;
-            font-size: 13px;
-            cursor: pointer;
-            color: #fff;
-        }
-        .btn-locate {
-            background: #1890ff;
-        }
-        .btn-locate:hover {
-            background: #40a9ff;
-        }
-        .btn-address {
-            background: #52c41a;
-        }
-        .btn-address:hover {
-            background: #73d13d;
-        }
-        .btn-reset {
-            background: #fa541c;
-        }
-        .btn-reset:hover {
-            background: #ff7a45;
-        }
-        .status-bar {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0,0,0,0.7);
-            color: #fff;
-            padding: 8px 16px;
+            margin: 5px;
+            padding: 8px 15px;
+            border: 1px solid #1890ff;
+            background: white;
+            color: #1890ff;
             border-radius: 4px;
-            font-size: 13px;
-            z-index: 100;
+            cursor: pointer;
+        }
+        .control-panel button:hover {
+            background: #1890ff;
+            color: white;
+        }
+        .coord-input {
+            margin: 10px 0;
+        }
+        .coord-input input {
+            width: 120px;
+            padding: 5px;
+            margin: 0 5px;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
         }
     </style>
 </head>
 <body>
-<h1 class="page-title">第4课：地图中心点定位（指定经纬度/地址）</h1>
-<div id="mapContainer"></div>
+    <h1 class="page-title">第4课：地图中心点定位（指定经纬度/地址）</h1>
+    
+    <div class="control-panel">
+        <div>
+            <button onclick="locateBeijing()">定位到北京</button>
+            <button onclick="locateShanghai()">定位到上海</button>
+            <button onclick="locateGuangzhou()">定位到广州</button>
+        </div>
+        
+        <div class="coord-input">
+            <br>
+            <label>经度: <input type="number" id="lngInput" value="116.4074" step="0.0001"></label>
+            <label>纬度: <input type="number" id="latInput" value="39.9042" step="0.0001"></label>
+            <button onclick="locateByInput()">定位到输入坐标</button>
+        </div>
+        
+        <div>
+            <br>
+            <button onclick="locateByAddress()">地址定位（天安门）</button>
+        </div>
+    </div>
+    
+    <div id="mapContainer"></div>
 
-<div class="control-panel">
-    <h3>📍 经纬度定位</h3>
-    <label>经度 (Longitude)</label>
-    <input type="number" id="inputLng" value="116.4074" step="0.0001">
-    <label>纬度 (Latitude)</label>
-    <input type="number" id="inputLat" value="39.9042" step="0.0001">
-    <label>缩放级别 (Zoom)</label>
-    <input type="number" id="inputZoom" value="14" min="1" max="20">
-    <button class="btn-locate" id="btnLocate">🎯 经纬度定位</button>
+    <script type="module">
+        const Map = await $arcgis.import("@arcgis/core/Map.js");
+        const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
+        const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
 
-    <h3 style="margin-top:15px;">🏠 地址定位</h3>
-    <label>输入地址</label>
-    <input type="text" id="inputAddress" value="北京市天安门广场" placeholder="输入地址后点击定位">
-    <button class="btn-address" id="btnAddress">🔍 地址定位</button>
+        // 加载影像底图
+        const imgLayers = getTianditu.default({ type: "img_w" });
 
-    <button class="btn-reset" id="btnReset">🔄 重置视图</button>
-</div>
-
-<div class="status-bar" id="statusBar">就绪</div>
-
-<script type="module">
-    const Map = await $arcgis.import("@arcgis/core/Map.js");
-    const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
-    const Graphic = await $arcgis.import("@arcgis/core/Graphic.js");
-    const Point = await $arcgis.import("@arcgis/core/geometry/Point.js");
-    const GraphicsLayer = await $arcgis.import("@arcgis/core/layers/GraphicsLayer.js");
-    const Locator = await $arcgis.import("@arcgis/core/tasks/Locator.js");
-    const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
-
-    // 初始状态
-    const initState = {
-        center: [118.805, 34.027],
-        zoom: 13,
-        tilt: 45
-    };
-
-    // 加载影像底图
-    const imgLayers = getTianditu.default({ type: "img_w" });
-
-    // 创建标注图层
-    const graphicsLayer = new GraphicsLayer({
-        title: "定位标注图层"
-    });
-
-    const map = new Map({
-        basemap: { baseLayers: [imgLayers.base, imgLayers.anno] },
-        ground: {
-            surface: {
-                elevationLayers: [{
-                    url: "https://www.geosceneonline.cn/image/rest/services/OpenData/ChinaTerrain3D/ImageServer/"
-                }]
-            }
-        }
-    });
-
-    map.add(graphicsLayer);
-
-    const view = new SceneView({
-        container: "mapContainer",
-        map: map,
-        center: initState.center,
-        zoom: initState.zoom,
-        tilt: initState.tilt
-    });
-
-    const statusBar = document.getElementById("statusBar");
-
-    // 添加定位标记点
-    function addMarker(lng, lat) {
-        graphicsLayer.removeAll();
-        const point = new Point({
-            longitude: lng,
-            latitude: lat
-        });
-        const markerGraphic = new Graphic({
-            geometry: point,
-            symbol: {
-                type: "simple-marker",
-                style: "circle",
-                size: 14,
-                color: [255, 0, 0, 0.8],
-                outline: {
-                    color: [255, 255, 255, 1],
-                    width: 2
+        const map = new Map({
+            basemap: { baseLayers: [imgLayers.base, imgLayers.anno] },
+            ground: {
+                surface: {
+                    elevationLayers: [{
+                        url: "https://www.geosceneonline.cn/image/rest/services/OpenData/ChinaTerrain3D/ImageServer/"
+                    }]
                 }
-            },
-            attributes: {
-                name: "定位点"
             }
         });
-        graphicsLayer.add(markerGraphic);
-    }
 
-    // 1. 经纬度定位
-    document.getElementById("btnLocate").onclick = () => {
-        const lng = parseFloat(document.getElementById("inputLng").value);
-        const lat = parseFloat(document.getElementById("inputLat").value);
-        const zoom = parseInt(document.getElementById("inputZoom").value);
-
-        if (isNaN(lng) || isNaN(lat)) {
-            statusBar.textContent = "⚠️ 请输入有效的经纬度";
-            return;
-        }
-
-        statusBar.textContent = `📍 正在定位到 [${lng.toFixed(4)}, ${lat.toFixed(4)}]...`;
-
-        view.goTo({
-            center: [lng, lat],
-            zoom: zoom,
+        const view = new SceneView({
+            container: "mapContainer",
+            map: map,
+            center: [118.805, 34.027],
+            zoom: 13,
             tilt: 45
-        }, {
-            animate: true,
-            duration: 1500
-        }).then(() => {
-            addMarker(lng, lat);
-            statusBar.textContent = `✅ 已定位到 [${lng.toFixed(4)}, ${lat.toFixed(4)}]，缩放级别: ${zoom}`;
         });
-    };
 
-    // 2. 地址定位（地理编码）
-    const locator = new Locator({
-        url: "https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer"
-    });
-
-    document.getElementById("btnAddress").onclick = () => {
-        const address = document.getElementById("inputAddress").value.trim();
-        if (!address) {
-            statusBar.textContent = "⚠️ 请输入地址";
-            return;
-        }
-
-        statusBar.textContent = `🔍 正在搜索地址: "${address}"...`;
-
-        locator.addressToLocations({
-            address: {
-                SingleLine: address
-            },
-            outFields: ["Addr_type", "StAddr", "City"]
-        }).then((results) => {
-            if (results.length > 0) {
-                const result = results[0];
-                const lng = result.location.longitude;
-                const lat = result.location.latitude;
-
-                view.goTo({
-                    center: [lng, lat],
-                    zoom: 15,
-                    tilt: 45
-                }, {
-                    animate: true,
-                    duration: 1500
-                }).then(() => {
-                    addMarker(lng, lat);
-                    statusBar.textContent = `✅ 地址定位成功: ${result.address} [${lng.toFixed(4)}, ${lat.toFixed(4)}]`;
+        view.when(() => {
+            console.log("三维地图加载完成！");
+            
+            // 添加点标记函数
+            window.addPointMarker = (longitude, latitude, title) => {
+                const Point = $arcgis.import("@arcgis/core/geometry/Point.js");
+                const Graphic = $arcgis.import("@arcgis/core/Graphic.js");
+                const SimpleMarkerSymbol = $arcgis.import("@arcgis/core/symbols/SimpleMarkerSymbol.js");
+                
+                const point = new Point({
+                    longitude: longitude,
+                    latitude: latitude
                 });
-            } else {
-                statusBar.textContent = "❌ 未找到该地址，请尝试更详细的地址";
+                
+                const markerSymbol = new SimpleMarkerSymbol({
+                    color: [255, 0, 0],
+                    size: 12
+                });
+                
+                const pointGraphic = new Graphic({
+                    geometry: point,
+                    symbol: markerSymbol,
+                    attributes: {
+                        title: title
+                    }
+                });
+                
+                view.graphics.add(pointGraphic);
+            };
+        });
+
+        // 1. 定位到北京
+        window.locateBeijing = () => {
+            view.goTo({
+                center: [116.4074, 39.9042],
+                zoom: 12,
+                animate: true
+            }).then(() => {
+                console.log("已定位到北京");
+            });
+        };
+
+        // 2. 定位到上海
+        window.locateShanghai = () => {
+            view.goTo({
+                center: [121.4737, 31.2304],
+                zoom: 12,
+                animate: true
+            }).then(() => {
+                console.log("已定位到上海");
+            });
+        };
+
+        // 3. 定位到广州
+        window.locateGuangzhou = () => {
+            view.goTo({
+                center: [113.2644, 23.1291],
+                zoom: 12,
+                animate: true
+            }).then(() => {
+                console.log("已定位到广州");
+            });
+        };
+
+        // 4. 根据输入框的坐标定位
+        window.locateByInput = () => {
+            const lng = parseFloat(document.getElementById("lngInput").value);
+            const lat = parseFloat(document.getElementById("latInput").value);
+            
+            if (isNaN(lng) || isNaN(lat)) {
+                alert("请输入有效的经纬度！");
+                return;
             }
-        }).catch((err) => {
-            statusBar.textContent = `❌ 地址解析失败: ${err.message || "未知错误"}`;
-            console.error("地址解析失败：", err);
-        });
-    };
+            
+            view.goTo({
+                center: [lng, lat],
+                zoom: 14,
+                animate: true
+            }).then(() => {
+                console.log(`已定位到经纬度: ${lng}, ${lat}`);
+            });
+        };
 
-    // 3. 重置视图
-    document.getElementById("btnReset").onclick = () => {
-        graphicsLayer.removeAll();
-        view.goTo({
-            center: initState.center,
-            zoom: initState.zoom,
-            tilt: initState.tilt
-        }, {
-            animate: true,
-            duration: 1000
-        }).then(() => {
-            statusBar.textContent = "🔄 视图已重置";
-        });
-    };
-
-    view.when(() => {
-        console.log("三维地图加载完成！");
-        statusBar.textContent = "✅ 地图就绪 — 输入经纬度或地址进行定位";
-    });
-</script>
+        // 5. 地址定位（使用地理编码服务）
+        window.locateByAddress = () => {
+            const locatorUrl = "https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer";
+            
+            const Locator = $arcgis.import("@arcgis/core/tasks/Locator.js");
+            const locator = new Locator({ url: locatorUrl });
+            
+            locator.addressToLocations({
+                address: {
+                    "Address": "北京市天安门广场"
+                },
+                outFields: ["*"]
+            }).then((results) => {
+                if (results.length > 0) {
+                    const location = results[0].location;
+                    view.goTo({
+                        center: [location.longitude, location.latitude],
+                        zoom: 15,
+                        animate: true
+                    }).then(() => {
+                        console.log("已定位到地址：北京市天安门广场");
+                        alert(`定位成功！\n地址：${results[0].address}\n经度：${location.longitude}\n纬度：${location.latitude}`);
+                    });
+                } else {
+                    alert("未找到该地址！");
+                }
+            }).catch((error) => {
+                console.error("地址解析失败：", error);
+                alert("地址解析失败，请检查网络连接或地址格式！");
+            });
+        };
+    </script>
 </body>
 </html>
