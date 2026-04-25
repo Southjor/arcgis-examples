@@ -148,12 +148,11 @@
             },
             symbol: {
                 type: "simple-marker",
-                color: [230, 76, 60, 0.9],
-                outline: {
-                    color: [255, 255, 255, 0.5],
-                    width: 1
-                },
-                size: index < 3 ? 12 : 10
+                color: [255, 69, 0, 1],
+                outline: { color: [255, 255, 255, 1], width: 2 },
+                size: index < 3 ? 16 : 14,
+                haloColor: [255, 215, 0, 0.8],
+                haloSize: 4
             },
             attributes: {
                 name: landmark.name,
@@ -171,13 +170,19 @@
         graphicsLayer.add(graphic);
     });
 
-    // 默认弹出第一个点的信息
+    // 视图加载完成后，定位到图层范围并弹出第一个标注
     view.when(() => {
-        view.popup.open({
-            location: { longitude: 116.3975, latitude: 39.9182 },
-            title: landmarks[0].name,
-            content: `类型：${landmarks[0].type}<br>等级：${landmarks[0].level}<br>地址：${landmarks[0].address}`
-        });
+        // 用goTo定位到图层graphics的联合范围
+        view.goTo(graphicsLayer.graphics)
+            .then(() => {
+                // 定位完成后弹出第一个标注的信息
+                view.popup.open({
+                    location: { longitude: 116.3975, latitude: 39.9182 },
+                    title: landmarks[0].name,
+                    content: `类型：${landmarks[0].type}<br>等级：${landmarks[0].level}<br>地址：${landmarks[0].address}`
+                });
+            })
+            .catch((err) => console.warn("goTo警告:", err));
 
         console.log("地图弹窗信息窗口示例加载完成！");
     });
