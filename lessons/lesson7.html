@@ -100,17 +100,14 @@
  // ========== 天地图图层 ==========
  const vecLayers = getTianditu.default({ type: "vec_w" });
 
- // ========== 创建 Map ==========
- const map = new Map({
+ function getMap(){
+ return new Map({
  basemap: { baseLayers: [vecLayers.base, vecLayers.anno] },
- ground: {
- surface: {
- elevationLayers: [{
- url: "https://www.geosceneonline.cn/image/rest/services/OpenData/ChinaTerrain3D/ImageServer/"
- }]
- }
- }
  });
+ }
+
+ // ========== 创建 Map ==========
+ let map = getMap();
 
  // ========== 初始为 Global 模式 ==========
  let currentMode = "global";
@@ -143,8 +140,6 @@
  window.switchToGlobal = () => {
  if (currentMode === "global") return;
  currentMode = "global";
- // 销毁旧视图，创建新视图（两模式无法动态切换同一实例）
- view.destroy();
  window.view = new SceneView({
  container: "mapContainer",
  map: map,
@@ -160,7 +155,6 @@
  window.switchToLocal = () => {
  if (currentMode === "local") return;
  currentMode = "local";
- view.destroy();
  window.view = new SceneView({
  container: "mapContainer",
  map: map,
