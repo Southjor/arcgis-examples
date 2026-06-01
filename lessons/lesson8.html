@@ -3,11 +3,12 @@
 <head>
  <meta charset="UTF-8">
  <meta name="viewport" content="width=device-width, initial-scale=1.0">
- <title>第8课：Global与Local场景模式</title>
+ <title>第8课：环境光照与阴影</title>
  <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css">
  <script type="module" src="https://js.arcgis.com/5.0/"></script>
  <style>
- body { margin: 0; padding: 0; font-family: "Microsoft YaHei", sans-serif; }
+ * { margin: 0; padding: 0; box-sizing: border-box; }
+ body { font-family: "Microsoft YaHei", sans-serif; }
  #mapContainer { width: 100vw; height: 100vh; }
  .page-title {
  position: absolute;
@@ -25,70 +26,105 @@
  .control-panel {
  position: absolute;
  top: 80px;
- left: 20px;
+ right: 20px;
  background: rgba(255,255,255,0.95);
  padding: 16px;
  border-radius: 8px;
  box-shadow: 0 2px 12px rgba(0,0,0,0.15);
  z-index: 100;
- min-width: 220px;
+ min-width: 240px;
  }
- .mode-badge {
- display: inline-block;
- padding: 4px 12px;
- border-radius: 12px;
- font-size: 13px;
- font-weight: bold;
+ .control-panel h3 {
+ margin: 0 0 12px 0;
+ font-size: 14px;
+ color: #333;
+ }
+ .form-group {
  margin-bottom: 12px;
  }
- .badge-global { background: #1890ff; color: white; }
- .badge-local { background: #52c41a; color: white; }
- .btn-group { display: flex; flex-direction: column; gap: 8px; }
- .btn-group button {
- padding: 10px 16px;
- border: none;
+ .form-group label {
+ display: block;
+ font-size: 12px;
+ color: #666;
+ margin-bottom: 4px;
+ }
+ .form-group input[type="range"] {
+ width: 100%;
+ }
+ .form-group input[type="checkbox"] {
+ margin-right: 6px;
+ }
+ .form-group input[type="datetime-local"] {
+ width: 100%;
+ padding: 4px;
+ }
+ .btn-row {
+ display: flex;
+ gap: 8px;
+ margin-top: 12px;
+ }
+ .btn-row button {
+ flex: 1;
+ padding: 8px 0;
+ border: 1px solid #d9d9d9;
  border-radius: 4px;
+ background: white;
  cursor: pointer;
  font-size: 13px;
- font-weight: 500;
  }
- .btn-global { background: #1890ff; color: white; }
- .btn-local { background: #52c41a; color: white; }
- .btn-compare { background: #722ed1; color: white; }
- .btn-group button:hover { opacity: 0.85; }
- .info-box {
+ .btn-row button:hover {
+ border-color: #1890ff;
+ color: #1890ff;
+ }
+ .status-text {
  position: absolute;
  bottom: 20px;
  left: 50%;
  transform: translateX(-50%);
- background: rgba(255,255,255,0.95);
- padding: 12px 20px;
- border-radius: 8px;
+ background: rgba(0,0,0,0.7);
+ color: white;
+ padding: 8px 20px;
+ border-radius: 20px;
  font-size: 13px;
- line-height: 1.8;
  z-index: 100;
- box-shadow: 0 2px 12px rgba(0,0,0,0.15);
- max-width: 600px;
+ pointer-events: none;
  }
- .info-box code { background: #f0f0f0; padding: 1px 4px; border-radius: 3px; }
  </style>
 </head>
 <body>
-<h1 class="page-title">第8课：Global 与 Local 场景模式</h1>
+<h1 class="page-title">第8课：环境光照与阴影</h1>
 
 <div class="control-panel">
- <div id="modeBadge" class="mode-badge badge-global">当前模式：GLOBAL</div>
- <div class="btn-group">
- <button class="btn-global" id="btnGlobal">切换为 Global 模式</button>
- <button class="btn-local" id="btnLocal">切换为 Local 模式</button>
- <button class="btn-compare" id="btnCompare">对比：北京 vs 小范围园区</button>
+ <h3>☀️ 光照控制</h3>
+ <div class="form-group">
+ <label>方位角（Azimuth）：<span id="valAzimuth">315°</span></label>
+ <input type="range" id="sliderAzimuth" min="0" max="360" value="315">
+ </div>
+ <div class="form-group">
+ <label>高度角（Altitude）：<span id="valAltitude">45°</span></label>
+ <input type="range" id="sliderAltitude" min="0" max="90" value="45">
+ </div>
+ <div class="form-group">
+ <label>日期时间驱动：</label>
+ <input type="datetime-local" id="datetimePicker" style="width:100%;padding:4px;">
+ </div>
+ <h3 style="margin-top:16px;">🌑 阴影控制</h3>
+ <div class="form-group">
+ <label><input type="checkbox" id="chkDirectShadows" checked> 开启直接阴影（directShadowsEnabled）</label>
+ </div>
+ <div class="form-group">
+ <label><input type="checkbox" id="chkCastShadows" checked> 图层投射阴影（castShadows）</label>
+ </div>
+ <div class="form-group">
+ <label><input type="checkbox" id="chkReceiveShadows" checked> 图层接收阴影（receiveShadows）</label>
+ </div>
+ <div class="btn-row">
+ <button id="btnResetLight">重置光照</button>
+ <button id="btnToggleShadows">切换阴影</button>
  </div>
 </div>
 
-<div class="info-box">
- 🌐 <b>Global 模式</b>：球面坐标系（WGS84），适合<code>全省/全国/全球</code>尺度<br>
- 📐 <b>Local 模式</b>：平面投影坐标系，适合<code>园区/城区</code>尺度，量算更精准
-</div>
+<div class="status-text" id="statusText">光照：方位角 315° / 高度角 45° | 阴影：开启</div>
 
 <div id="mapContainer"></div>
 
@@ -97,10 +133,8 @@
  const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
  const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
 
- // ========== 天地图图层 ==========
+ // 天地图底图
  const vecLayers = getTianditu.default({ type: "vec_w" });
-
- // ========== 创建 Map ==========
  const map = new Map({
  basemap: { baseLayers: [vecLayers.base, vecLayers.anno] },
  ground: {
@@ -112,95 +146,140 @@
  }
  });
 
- // ========== 初始为 Global 模式 ==========
- let currentMode = "global";
-
- window.view = new SceneView({
+ const view = new SceneView({
  container: "mapContainer",
  map: map,
- viewingMode: "global", // 关键属性：global | local
- center: [116.39, 39.9],
- zoom: 10,
- tilt: 60,
- constraints: {
- altitude: { max: 20000000 } // 限制最大高度，避免缩太小
- }
- });
-
- // ========== 更新 UI 徽章 ==========
- function updateBadge(mode) {
- const badge = document.getElementById("modeBadge");
- if (mode === "global") {
- badge.className = "mode-badge badge-global";
- badge.textContent = "当前模式：GLOBAL（球面）";
- } else {
- badge.className = "mode-badge badge-local";
- badge.textContent = "当前模式：LOCAL（平面）";
- }
- }
-
- // ========== 切换为 Global 模式 ==========
- window.switchToGlobal = () => {
- if (currentMode === "global") return;
- currentMode = "global";
- // 销毁旧视图，创建新视图（两模式无法动态切换同一实例）
- view.destroy();
- window.view = new SceneView({
- container: "mapContainer",
- map: map,
- viewingMode: "global",
- center: [116.39, 39.9],
- zoom: 10,
+ center: [116.39, 39.9], // 北京
+ zoom: 12,
  tilt: 60
  });
- updateBadge("global");
+
+ window.view = view;
+
+ // ===== 等待视图就绪 =====
+ view.when(() => {
+ console.log("场景加载完成，开始配置光照和阴影...");
+ initLighting();
+ initShadows();
+ updateStatus();
+ });
+
+ // ===== 初始化光照 =====
+ function initLighting() {
+ // 手动设置太阳位置（方位角 315° = 西南方向，高度角 45°）
+ view.environment.lighting = {
+ azimuth: 315, // 方位角（0-360°）
+ altitude: 45 // 高度角（0-90°）
  };
 
- // ========== 切换为 Local 模式 ==========
- window.switchToLocal = () => {
- if (currentMode === "local") return;
- currentMode = "local";
- view.destroy();
- window.view = new SceneView({
- container: "mapContainer",
- map: map,
- viewingMode: "local", // 关键：切换为局部平面模式
- center: [116.39, 39.9],
- zoom: 14,
- tilt: 55,
- constraints: {
- clipToExtent: true, // 限制仅渲染 extent 范围内
- altitude: { max: 50000 }
+ // 绑定滑块事件
+ document.getElementById("sliderAzimuth").addEventListener("input", (e) => {
+ const val = parseInt(e.target.value);
+ view.environment.lighting.azimuth = val;
+ document.getElementById("valAzimuth").textContent = val + "°";
+ updateStatus();
+ });
+
+ document.getElementById("sliderAltitude").addEventListener("input", (e) => {
+ const val = parseInt(e.target.value);
+ view.environment.lighting.altitude = val;
+ document.getElementById("valAltitude").textContent = val + "°";
+ updateStatus();
+ });
+
+ // 日期时间选择器 → 自动计算太阳位置
+ const datePicker = document.getElementById("datetimePicker");
+ // 默认：今天下午 14:00
+ const now = new Date();
+ now.setHours(14, 0, 0, 0);
+ datePicker.value = formatDateLocal(now);
+
+ datePicker.addEventListener("change", (e) => {
+ const selectedDate = new Date(e.target.value);
+ // 使用日期驱动光照（自动计算太阳位置）
+ view.environment.lighting = {
+ date: selectedDate
+ };
+ updateStatus();
+ });
+ }
+
+ // ===== 初始化阴影 =====
+ function initShadows() {
+ // 全局开启直接阴影
+ view.environment.lighting.directShadowsEnabled = true;
+
+ document.getElementById("chkDirectShadows").addEventListener("change", (e) => {
+ view.environment.lighting.directShadowsEnabled = e.target.checked;
+ updateStatus();
+ });
+
+ // 对所有 FeatureLayer 开启阴影
+ view.map.allLayers.forEach((layer) => {
+ if (layer.type === "feature") {
+ layer.castShadows = true;
+ layer.receiveShadows = true;
  }
  });
- updateBadge("local");
- };
 
- // ========== 对比演示：分别定位到全球视角和局部园区 ==========
- window.compareModes = () => {
- if (currentMode === "global") {
- // 当前是 Global → 飞到北京上空（展示球面效果）
- view.goTo({
- position: [116.39, 39.9, 2500000],
- tilt: 0,
- heading: 0
+ document.getElementById("chkCastShadows").addEventListener("change", (e) => {
+ view.map.allLayers.forEach((layer) => {
+ if (layer.type === "feature") {
+ layer.castShadows = e.target.checked;
+ }
  });
- } else {
- // 当前是 Local → 定位到小规模园区范围
- view.goTo({
- position: [116.39, 39.9, 2000],
- tilt: 55,
- heading: 0
+ updateStatus();
+ });
+
+ document.getElementById("chkReceiveShadows").addEventListener("change", (e) => {
+ view.map.allLayers.forEach((layer) => {
+ if (layer.type === "feature") {
+ layer.receiveShadows = e.target.checked;
+ }
+ });
+ updateStatus();
  });
  }
+
+ // ===== 按钮事件 =====
+ document.getElementById("btnResetLight").addEventListener("click", () => {
+ // 重置为默认光照（午后）
+ view.environment.lighting = {
+ azimuth: 315,
+ altitude: 45
  };
+ document.getElementById("sliderAzimuth").value = 315;
+ document.getElementById("sliderAltitude").value = 45;
+ document.getElementById("valAzimuth").textContent = "315°";
+ document.getElementById("valAltitude").textContent = "45°";
+ updateStatus();
+ });
 
- document.getElementById("btnGlobal").onclick = switchToGlobal;
- document.getElementById("btnLocal").onclick = switchToLocal;
- document.getElementById("btnCompare").onclick = compareModes;
+ document.getElementById("btnToggleShadows").addEventListener("click", () => {
+ const current = view.environment.lighting.directShadowsEnabled;
+ view.environment.lighting.directShadowsEnabled = !current;
+ document.getElementById("chkDirectShadows").checked = !current;
+ updateStatus();
+ });
 
- updateBadge("global");
- view.when(() => console.log("Global/Local 场景模式示例加载完成！"));
+ // ===== 辅助函数 =====
+ function formatDateLocal(date) {
+ const y = date.getFullYear();
+ const m = String(date.getMonth() + 1).padStart(2, "0");
+ const d = String(date.getDate()).padStart(2, "0");
+ const h = String(date.getHours()).padStart(2, "0");
+ const min = String(date.getMinutes()).padStart(2, "0");
+ return `${y}-${m}-${d}T${h}:${min}`;
+ }
+
+ function updateStatus() {
+ const lighting = view.environment.lighting;
+ const az = lighting.azimuth != null ? lighting.azimuth : "自动";
+ const alt = lighting.altitude != null ? lighting.altitude : "自动";
+ const shadowsOn = view.environment.lighting.directShadowsEnabled ? "开启" : "关闭";
+ document.getElementById("statusText").textContent =
+ `光照：方位角 ${az}° / 高度角 ${alt}° | 阴影：${shadowsOn}`;
+ }
 </script>
 </body>
 </html>
