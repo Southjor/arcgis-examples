@@ -12,82 +12,77 @@
  #mapContainer { width: 100vw; height: 100vh; }
  .page-title {
  position: absolute;
- top: 20px;
- left: 50%;
+ top: 20px; left: 50%;
  transform: translateX(-50%);
  background: rgba(255,255,255,0.95);
- padding: 10px 24px;
- border-radius: 6px;
- font-size: 18px;
- font-weight: bold;
+ padding: 10px 24px; border-radius: 6px;
+ font-size: 18px; font-weight: bold;
  z-index: 100;
  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
  }
  .control-panel {
  position: absolute;
- top: 80px;
- right: 20px;
+ top: 80px; right: 20px;
  background: rgba(255,255,255,0.95);
- padding: 16px;
- border-radius: 8px;
+ padding: 16px; border-radius: 8px;
  box-shadow: 0 2px 12px rgba(0,0,0,0.15);
- z-index: 100;
- min-width: 240px;
+ z-index: 100; min-width: 260px;
  }
  .control-panel h3 {
  margin: 0 0 12px 0;
- font-size: 14px;
- color: #333;
+ font-size: 14px; color: #333;
  }
- .form-group {
- margin-bottom: 12px;
- }
+ .form-group { margin-bottom: 12px; }
  .form-group label {
  display: block;
- font-size: 12px;
- color: #666;
+ font-size: 12px; color: #666;
  margin-bottom: 4px;
  }
- .form-group input[type="range"] {
- width: 100%;
- }
- .form-group input[type="checkbox"] {
- margin-right: 6px;
- }
+ .form-group input[type="range"] { width: 100%; }
+ .form-group input[type="checkbox"] { margin-right: 6px; }
  .form-group input[type="datetime-local"] {
- width: 100%;
- padding: 4px;
+ width: 100%; padding: 4px;
+ }
+ .preset-row {
+ display: flex; gap: 6px;
+ margin-top: 8px; flex-wrap: wrap;
+ }
+ .preset-row button {
+ padding: 4px 10px;
+ font-size: 12px;
+ border: 1px solid #d9d9d9;
+ border-radius: 4px;
+ background: white; cursor: pointer;
+ }
+ .preset-row button:hover {
+ border-color: #1890ff; color: #1890ff;
+ }
+ .preset-row button.active {
+ background: #1890ff; color: white;
+ border-color: #1890ff;
  }
  .btn-row {
- display: flex;
- gap: 8px;
+ display: flex; gap: 8px;
  margin-top: 12px;
  }
  .btn-row button {
- flex: 1;
- padding: 8px 0;
- border: 1px solid #d9d9d9;
- border-radius: 4px;
- background: white;
- cursor: pointer;
+ flex: 1; padding: 8px 0;
+ border: 1px solid #d9d9d9; border-radius: 4px;
+ background: white; cursor: pointer;
  font-size: 13px;
  }
  .btn-row button:hover {
- border-color: #1890ff;
- color: #1890ff;
+ border-color: #1890ff; color: #1890ff;
  }
  .status-text {
  position: absolute;
- bottom: 20px;
- left: 50%;
+ bottom: 20px; left: 50%;
  transform: translateX(-50%);
  background: rgba(0,0,0,0.7);
  color: white;
- padding: 8px 20px;
- border-radius: 20px;
+ padding: 8px 20px; border-radius: 20px;
  font-size: 13px;
- z-index: 100;
- pointer-events: none;
+ z-index: 100; pointer-events: none;
  }
  </style>
 </head>
@@ -95,45 +90,46 @@
 <h1 class="page-title">第8课：环境光照与阴影</h1>
 
 <div class="control-panel">
- <h3>☀️ 光照控制</h3>
+ <h3>☀️ 太阳时间控制</h3>
  <div class="form-group">
- <label>方位角（Azimuth）：<span id="valAzimuth">315°</span></label>
- <input type="range" id="sliderAzimuth" min="0" max="360" value="315">
+ <label>时间（小时）：<span id="valHour">14:00</span></label>
+ <input type="range" id="sliderHour" min="5" max="21" value="14" step="0.5">
  </div>
- <div class="form-group">
- <label>高度角（Altitude）：<span id="valAltitude">45°</span></label>
- <input type="range" id="sliderAltitude" min="0" max="90" value="45">
+ <div class="preset-row">
+ <button data-hour="6">🌅 清晨</button>
+ <button data-hour="12">☀️ 正午</button>
+ <button data-hour="16">🌤️ 午后</button>
+ <button data-hour="19">🌇 傍晚</button>
  </div>
- <div class="form-group">
- <label>日期时间驱动：</label>
+ <div class="form-group" style="margin-top:12px;">
+ <label>完整日期选择：</label>
  <input type="datetime-local" id="datetimePicker" style="width:100%;padding:4px;">
  </div>
+
  <h3 style="margin-top:16px;">🌑 阴影控制</h3>
  <div class="form-group">
  <label><input type="checkbox" id="chkDirectShadows" checked> 开启直接阴影（directShadowsEnabled）</label>
  </div>
- <div class="form-group">
- <label><input type="checkbox" id="chkCastShadows" checked> 图层投射阴影（castShadows）</label>
- </div>
- <div class="form-group">
- <label><input type="checkbox" id="chkReceiveShadows" checked> 图层接收阴影（receiveShadows）</label>
- </div>
  <div class="btn-row">
- <button id="btnResetLight">重置光照</button>
+ <button id="btnResetLight">重置时间</button>
  <button id="btnToggleShadows">切换阴影</button>
  </div>
 </div>
 
-<div class="status-text" id="statusText">光照：方位角 315° / 高度角 45° | 阴影：开启</div>
+<div class="status-text" id="statusText">时间：14:00 | 阴影：开启</div>
 
 <div id="mapContainer"></div>
 
 <script type="module">
  const Map = await $arcgis.import("@arcgis/core/Map.js");
  const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
+ const GraphicsLayer = await $arcgis.import("@arcgis/core/layers/GraphicsLayer.js");
+ const Graphic = await $arcgis.import("@arcgis/core/Graphic.js");
+ const Mesh = await $arcgis.import("@arcgis/core/geometry/Mesh.js");
+ const Point = await $arcgis.import("@arcgis/core/geometry/Point.js");
  const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
 
- // 天地图底图
+ // 天地图底图 + 高程
  const vecLayers = getTianditu.default({ type: "vec_w" });
  const map = new Map({
  basemap: { baseLayers: [vecLayers.base, vecLayers.anno] },
@@ -150,108 +146,149 @@
  container: "mapContainer",
  map: map,
  center: [116.39, 39.9], // 北京
- zoom: 12,
- tilt: 60
+ zoom: 17,
+ tilt: 65
  });
 
  window.view = view;
 
+ // ===== 添加 3D 方块用于观察阴影 =====
+ function addShadowObjects() {
+ // Mesh.createBox 的 Point.z 是盒体底部中心（非几何中心）
+ // 高 200m 的盒子，z=0 表示盒子底部贴在地面上
+ const boxMesh = Mesh.createBox(
+ new Point({ longitude: 116.392, latitude: 39.902, z: 0 }),
+ { size: { width: 200, height: 200, depth: 200 } }
+ );
+ const boxGraphic = new Graphic({
+ geometry: boxMesh,
+ symbol: {
+ type: "mesh-3d",
+ symbolLayers: [{ type: "fill", material: { color: [255, 165, 0, 0.95] } }]
+ }
+ });
+
+ // 第二方块，高 150m
+ const smallBoxMesh = Mesh.createBox(
+ new Point({ longitude: 116.3935, latitude: 39.901, z: 0 }),
+ { size: { width: 100, height: 150, depth: 100 } }
+ );
+ const smallBoxGraphic = new Graphic({
+ geometry: smallBoxMesh,
+ symbol: {
+ type: "mesh-3d",
+ symbolLayers: [{ type: "fill", material: { color: [70, 130, 180, 0.95] } }]
+ }
+ });
+
+ // 细高柱子，高 300m，方便观察长阴影
+ const pillarMesh = Mesh.createBox(
+ new Point({ longitude: 116.391, latitude: 39.9005, z: 0 }),
+ { size: { width: 30, height: 300, depth: 30 } }
+ );
+ const pillarGraphic = new Graphic({
+ geometry: pillarMesh,
+ symbol: {
+ type: "mesh-3d",
+ symbolLayers: [{ type: "fill", material: { color: [50, 205, 50, 0.95] } }]
+ }
+ });
+
+ const boxLayer = new GraphicsLayer({
+ graphics: [boxGraphic, smallBoxGraphic, pillarGraphic],
+ castShadows: true,
+ receiveShadows: true,
+ title: "阴影观察物体"
+ });
+
+ map.add(boxLayer);
+ console.log("3D 物体已添加到场景");
+ }
+
  // ===== 等待视图就绪 =====
  view.when(() => {
- console.log("场景加载完成，开始配置光照和阴影...");
+ console.log("场景加载完成");
+ addShadowObjects();
  initLighting();
- initShadows();
  updateStatus();
  });
+
+ // ===== 初始日期（今天 14:00 北京时区 = UTC+8）=====
+ const baseDate = new Date();
+ baseDate.setHours(14, 0, 0, 0);
 
  // ===== 初始化光照 =====
  function initLighting() {
- // 手动设置太阳位置（方位角 315° = 西南方向，高度角 45°）
- view.environment.lighting = {
- azimuth: 315, // 方位角（0-360°）
- altitude: 45 // 高度角（0-90°）
- };
+ // 初始：SunLighting, 今天14:00, 开启阴影
+ applySunDate(getDateWithHour(14));
 
- // 绑定滑块事件
- document.getElementById("sliderAzimuth").addEventListener("input", (e) => {
- const val = parseInt(e.target.value);
- view.environment.lighting.azimuth = val;
- document.getElementById("valAzimuth").textContent = val + "°";
+ // 时间滑块
+ document.getElementById("sliderHour").addEventListener("input", (e) => {
+ const hour = parseFloat(e.target.value);
+ applySunDate(getDateWithHour(hour));
+ document.getElementById("valHour").textContent = formatHour(hour);
+ clearPresetActive();
  updateStatus();
  });
 
- document.getElementById("sliderAltitude").addEventListener("input", (e) => {
- const val = parseInt(e.target.value);
- view.environment.lighting.altitude = val;
- document.getElementById("valAltitude").textContent = val + "°";
+ // 时间预设按钮
+ document.querySelectorAll(".preset-row button").forEach(btn => {
+ btn.addEventListener("click", () => {
+ const hour = parseFloat(btn.dataset.hour);
+ document.getElementById("sliderHour").value = hour;
+ document.getElementById("valHour").textContent = formatHour(hour);
+ applySunDate(getDateWithHour(hour));
+ clearPresetActive();
+ btn.classList.add("active");
  updateStatus();
  });
+ });
 
- // 日期时间选择器 → 自动计算太阳位置
+ // 日期选择器
  const datePicker = document.getElementById("datetimePicker");
- // 默认：今天下午 14:00
- const now = new Date();
- now.setHours(14, 0, 0, 0);
- datePicker.value = formatDateLocal(now);
+ datePicker.value = formatDateLocal(baseDate);
 
  datePicker.addEventListener("change", (e) => {
- const selectedDate = new Date(e.target.value);
- // 使用日期驱动光照（自动计算太阳位置）
- view.environment.lighting = {
- date: selectedDate
- };
+ const selected = new Date(e.target.value);
+ applySunDate(selected);
+ // 同步滑块
+ const h = selected.getHours() + selected.getMinutes() / 60;
+ document.getElementById("sliderHour").value = h;
+ document.getElementById("valHour").textContent = formatHour(h);
+ clearPresetActive();
  updateStatus();
  });
  }
 
- // ===== 初始化阴影 =====
- function initShadows() {
- // 全局开启直接阴影
- view.environment.lighting.directShadowsEnabled = true;
+ // 用 date 构造 SunLighting 配置，设置光照时间
+ function applySunDate(date) {
+ view.environment.lighting = {
+ type: "sun",
+ date: date,
+ directShadowsEnabled: document.getElementById("chkDirectShadows").checked
+ };
+ }
 
+ // 获取指定时间（小时）的 Date 对象，保留今天的年月日
+ function getDateWithHour(hour) {
+ const d = new Date();
+ d.setHours(Math.floor(hour), Math.round((hour % 1) * 60), 0, 0);
+ return d;
+ }
+
+ // ===== 阴影控制 =====
  document.getElementById("chkDirectShadows").addEventListener("change", (e) => {
  view.environment.lighting.directShadowsEnabled = e.target.checked;
  updateStatus();
  });
 
- // 对所有 FeatureLayer 开启阴影
- view.map.allLayers.forEach((layer) => {
- if (layer.type === "feature") {
- layer.castShadows = true;
- layer.receiveShadows = true;
- }
- });
-
- document.getElementById("chkCastShadows").addEventListener("change", (e) => {
- view.map.allLayers.forEach((layer) => {
- if (layer.type === "feature") {
- layer.castShadows = e.target.checked;
- }
- });
- updateStatus();
- });
-
- document.getElementById("chkReceiveShadows").addEventListener("change", (e) => {
- view.map.allLayers.forEach((layer) => {
- if (layer.type === "feature") {
- layer.receiveShadows = e.target.checked;
- }
- });
- updateStatus();
- });
- }
-
  // ===== 按钮事件 =====
  document.getElementById("btnResetLight").addEventListener("click", () => {
- // 重置为默认光照（午后）
- view.environment.lighting = {
- azimuth: 315,
- altitude: 45
- };
- document.getElementById("sliderAzimuth").value = 315;
- document.getElementById("sliderAltitude").value = 45;
- document.getElementById("valAzimuth").textContent = "315°";
- document.getElementById("valAltitude").textContent = "45°";
+ const h = 14;
+ document.getElementById("sliderHour").value = h;
+ document.getElementById("valHour").textContent = formatHour(h);
+ applySunDate(getDateWithHour(h));
+ clearPresetActive();
  updateStatus();
  });
 
@@ -263,22 +300,31 @@
  });
 
  // ===== 辅助函数 =====
+ function clearPresetActive() {
+ document.querySelectorAll(".preset-row button").forEach(b => b.classList.remove("active"));
+ }
+
+ function formatHour(hour) {
+ const h = Math.floor(hour);
+ const m = Math.round((hour % 1) * 60);
+ return String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0");
+ }
+
  function formatDateLocal(date) {
  const y = date.getFullYear();
  const m = String(date.getMonth() + 1).padStart(2, "0");
  const d = String(date.getDate()).padStart(2, "0");
- const h = String(date.getHours()).padStart(2, "0");
+ const hh = String(date.getHours()).padStart(2, "0");
  const min = String(date.getMinutes()).padStart(2, "0");
- return `${y}-${m}-${d}T${h}:${min}`;
+ return y + "-" + m + "-" + d + "T" + hh + ":" + min;
  }
 
  function updateStatus() {
- const lighting = view.environment.lighting;
- const az = lighting.azimuth != null ? lighting.azimuth : "自动";
- const alt = lighting.altitude != null ? lighting.altitude : "自动";
- const shadowsOn = view.environment.lighting.directShadowsEnabled ? "开启" : "关闭";
+ const l = view.environment.lighting;
+ const hour = l.date ? formatHour(l.date.getHours() + l.date.getMinutes() / 60) : "--:--";
+ const shadowsOn = l.directShadowsEnabled ? "开启" : "关闭";
  document.getElementById("statusText").textContent =
- `光照：方位角 ${az}° / 高度角 ${alt}° | 阴影：${shadowsOn}`;
+ `时间：${hour}（UTC+8） | 阴影：${shadowsOn}`;
  }
 </script>
 </body>
