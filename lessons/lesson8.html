@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>第8课：Global与Local场景模式</title>
+ <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css">
+ <script type="module" src="https://js.arcgis.com/5.0/"></script>
+ <style>
+ body { margin: 0; padding: 0; font-family: "Microsoft YaHei", sans-serif; }
+ #mapContainer { width: 100vw; height: 100vh; }
+ .page-title {
+ position: absolute;
+ top: 20px;
+ left: 50%;
+ transform: translateX(-50%);
+ background: rgba(255,255,255,0.95);
+ padding: 10px 24px;
+ border-radius: 6px;
+ font-size: 18px;
+ font-weight: bold;
+ z-index: 100;
+ box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+ }
+ .control-panel {
+ position: absolute;
+ top: 80px;
+ left: 20px;
+ background: rgba(255,255,255,0.95);
+ padding: 16px;
+ border-radius: 8px;
+ box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+ z-index: 100;
+ min-width: 220px;
+ }
+ .mode-badge {
+ display: inline-block;
+ padding: 4px 12px;
+ border-radius: 12px;
+ font-size: 13px;
+ font-weight: bold;
+ margin-bottom: 12px;
+ }
+ .badge-global { background: #1890ff; color: white; }
+ .badge-local { background: #52c41a; color: white; }
+ .btn-group { display: flex; flex-direction: column; gap: 8px; }
+ .btn-group button {
+ padding: 10px 16px;
+ border: none;
+ border-radius: 4px;
+ cursor: pointer;
+ font-size: 13px;
+ font-weight: 500;
+ }
+ .btn-global { background: #1890ff; color: white; }
+ .btn-local { background: #52c41a; color: white; }
+ .btn-compare { background: #722ed1; color: white; }
+ .btn-group button:hover { opacity: 0.85; }
+ .info-box {
+ position: absolute;
+ bottom: 20px;
+ left: 50%;
+ transform: translateX(-50%);
+ background: rgba(255,255,255,0.95);
+ padding: 12px 20px;
+ border-radius: 8px;
+ font-size: 13px;
+ line-height: 1.8;
+ z-index: 100;
+ box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+ max-width: 600px;
+ }
+ .info-box code { background: #f0f0f0; padding: 1px 4px; border-radius: 3px; }
+ </style>
+</head>
+<body>
+<h1 class="page-title">第8课：Global 与 Local 场景模式</h1>
+
+<div class="control-panel">
+ <div id="modeBadge" class="mode-badge badge-global">当前模式：GLOBAL</div>
+ <div class="btn-group">
+ <button class="btn-global" id="btnGlobal">切换为 Global 模式</button>
+ <button class="btn-local" id="btnLocal">切换为 Local 模式</button>
+ <button class="btn-compare" id="btnCompare">对比：北京 vs 小范围园区</button>
+ </div>
+</div>
+
+<div class="info-box">
+ 🌐 <b>Global 模式</b>：球面坐标系（WGS84），适合<code>全省/全国/全球</code>尺度<br>
+ 📐 <b>Local 模式</b>：平面投影坐标系，适合<code>园区/城区</code>尺度，量算更精准
+</div>
+
+<div id="mapContainer"></div>
+
+<script type="module">
+ const Map = await $arcgis.import("@arcgis/core/Map.js");
+ const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
+ const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
+
+ // ========== 天地图图层 ==========
+ const vecLayers = getTianditu.default({ type: "vec_w" });
+
+ // ========== 创建 Map ==========
+ const map = new Map({
+ basemap: { baseLayers: [vecLayers.base, vecLayers.anno] },
+ ground: {
+ surface: {
+ elevationLayers: [{
+ url: "https://www.geosceneonline.cn/image/rest/services/OpenData/ChinaTerrain3D/ImageServer/"
+ }]
+ }
+ }
+ });
+
+ // ========== 初始为 Global 模式 ==========
+ let currentMode = "global";
+
+ window.view = new SceneView({
+ container: "mapContainer",
+ map: map,
+ viewingMode: "global", // 关键属性：global | local
+ center: [116.39, 39.9],
+ zoom: 10,
+ tilt: 60,
+ constraints: {
+ altitude: { max: 20000000 } // 限制最大高度，避免缩太小
+ }
+ });
+
+ // ========== 更新 UI 徽章 ==========
+ function updateBadge(mode) {
+ const badge = document.getElementById("modeBadge");
+ if (mode === "global") {
+ badge.className = "mode-badge badge-global";
+ badge.textContent = "当前模式：GLOBAL（球面）";
+ } else {
+ badge.className = "mode-badge badge-local";
+ badge.textContent = "当前模式：LOCAL（平面）";
+ }
+ }
+
+ // ========== 切换为 Global 模式 ==========
+ window.switchToGlobal = () => {
+ if (currentMode === "global") return;
+ currentMode = "global";
+ // 销毁旧视图，创建新视图（两模式无法动态切换同一实例）
+ view.destroy();
+ window.view = new SceneView({
+ container: "mapContainer",
+ map: map,
+ viewingMode: "global",
+ center: [116.39, 39.9],
+ zoom: 10,
+ tilt: 60
+ });
+ updateBadge("global");
+ };
+
+ // ========== 切换为 Local 模式 ==========
+ window.switchToLocal = () => {
+ if (currentMode === "local") return;
+ currentMode = "local";
+ view.destroy();
+ window.view = new SceneView({
+ container: "mapContainer",
+ map: map,
+ viewingMode: "local", // 关键：切换为局部平面模式
+ center: [116.39, 39.9],
+ zoom: 14,
+ tilt: 55,
+ constraints: {
+ clipToExtent: true, // 限制仅渲染 extent 范围内
+ altitude: { max: 50000 }
+ }
+ });
+ updateBadge("local");
+ };
+
+ // ========== 对比演示：分别定位到全球视角和局部园区 ==========
+ window.compareModes = () => {
+ if (currentMode === "global") {
+ // 当前是 Global → 飞到北京上空（展示球面效果）
+ view.goTo({
+ position: [116.39, 39.9, 2500000],
+ tilt: 0,
+ heading: 0
+ });
+ } else {
+ // 当前是 Local → 定位到小规模园区范围
+ view.goTo({
+ position: [116.39, 39.9, 2000],
+ tilt: 55,
+ heading: 0
+ });
+ }
+ };
+
+ document.getElementById("btnGlobal").onclick = switchToGlobal;
+ document.getElementById("btnLocal").onclick = switchToLocal;
+ document.getElementById("btnCompare").onclick = compareModes;
+
+ updateBadge("global");
+ view.when(() => console.log("Global/Local 场景模式示例加载完成！"));
+</script>
+</body>
+</html>
