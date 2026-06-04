@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>第9课：天空盒与大气效果</title>
+ <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css">
+ <script type="module" src="https://js.arcgis.com/5.0/"></script>
+ <style>
+ * { margin: 0; padding: 0; box-sizing: border-box; }
+ body {
+ font-family: "Microsoft YaHei", sans-serif;
+ /* 棋盘格背景 — 用于演示透明背景效果 */
+ background-image:
+ linear-gradient(45deg, #e9e6ef 25%, transparent 25%, transparent 75%, #e9e6ef 75%),
+ linear-gradient(45deg, #e9e6ef 25%, transparent 25%, transparent 75%, #e9e6ef 75%);
+ background-size: 51px 51px;
+ background-position: 0 0, 25px 25px;
+ }
+ #mapContainer { width: 100vw; height: 100vh; }
+ .page-title {
+ position: absolute;
+ top: 20px; left: 50%;
+ transform: translateX(-50%);
+ background: rgba(255,255,255,0.95);
+ padding: 10px 24px; border-radius: 6px;
+ font-size: 18px; font-weight: bold;
+ z-index: 100;
+ box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+ }
+ .control-panel {
+ position: absolute;
+ top: 80px; right: 20px;
+ background: rgba(255,255,255,0.95);
+ padding: 16px; border-radius: 8px;
+ box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+ z-index: 100; min-width: 300px; max-height: 85vh; overflow-y: auto;
+ }
+ .control-panel h3 { margin: 0 0 10px 0; font-size: 14px; color: #333; }
+ .toggle-group { margin-bottom: 12px; }
+ .toggle-group label {
+ display: flex; align-items: center;
+ font-size: 13px; color: #333; cursor: pointer;
+ padding: 6px 10px; border-radius: 6px;
+ background: #f8f9fa; margin-bottom: 4px;
+ transition: background 0.2s;
+ }
+ .toggle-group label:hover { background: #e8f4ff; }
+ .toggle-group input[type="checkbox"] {
+ margin-right: 8px; width: 16px; height: 16px; cursor: pointer;
+ }
+ .toggle-group .desc { font-size: 11px; color: #999; margin-left: auto; }
+ .form-group { margin-bottom: 10px; }
+ .form-group label { display: block; font-size: 12px; color: #666; margin-bottom: 4px; }
+ .form-group select {
+ width: 100%; padding: 6px 8px; border: 1px solid #d9d9d9; border-radius: 4px;
+ font-size: 13px; background: white; cursor: pointer;
+ }
+ .time-presets { margin-top: 12px; }
+ .time-presets h4 { font-size: 12px; color: #666; margin-bottom: 8px; }
+ .preset-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+ .preset-row button {
+ padding: 5px 10px; font-size: 12px;
+ border: 1px solid #d9d9d9; border-radius: 4px;
+ background: white; cursor: pointer;
+ transition: all 0.2s;
+ }
+ .preset-row button:hover { border-color: #1890ff; color: #1890ff; }
+ .preset-row button.active { background: #1890ff; color: white; border-color: #1890ff; }
+ .info-card {
+ margin-top: 12px; padding: 10px 12px;
+ background: #f0f5ff; border-radius: 6px;
+ border-left: 3px solid #1890ff;
+ }
+ .info-card .label { font-size: 11px; color: #666; margin-bottom: 2px; }
+ .info-card .value { font-size: 13px; color: #333; font-weight: bold; }
+ .status-text {
+ position: absolute; bottom: 20px; left: 50%;
+ transform: translateX(-50%);
+ background: rgba(0,0,0,0.7); color: white;
+ padding: 8px 20px; border-radius: 20px;
+ font-size: 13px; z-index: 100; pointer-events: none;
+ }
+ </style>
+</head>
+<body>
+<h1 class="page-title">第9课：天空盒与大气效果</h1>
+
+<div class="control-panel">
+ <h3>🌌 天空环境控制</h3>
+
+ <div class="toggle-group">
+ <label>
+ <input type="checkbox" id="chkAtmosphere" checked>
+ <span>大气效果 <span class="desc">atmosphereEnabled</span></span>
+ </label>
+ <label>
+ <input type="checkbox" id="chkStars" checked>
+ <span>星空显示 <span class="desc">starsEnabled</span></span>
+ </label>
+ </div>
+
+ <h3>🎨 自定义背景颜色</h3>
+ <div class="form-group">
+ <label>背景颜色预设：</label>
+ <select id="selBackground">
+ <option value="default">⬛ 默认（黑色）</option>
+ <option value="white">🤍 米白色 [255,252,244,1]</option>
+ <option value="skyblue">💙 天空蓝 [135,206,235,1]</option>
+ <option value="darkgray">⬛ 深灰 [40,40,40,1]</option>
+ <option value="transparent">🫥 透明 [0,0,0,0]（需开启透明度合成）</option>
+ <option value="semitransparent">🌫️ 半透明黑 [0,0,0,0.5]</option>
+ </select>
+ </div>
+ <div class="toggle-group">
+ <label>
+ <input type="checkbox" id="chkAlphaCompositing">
+ <span>启用透明度合成 <span class="desc">alphaCompositingEnabled</span></span>
+ </label>
+ </div>
+
+ <div class="time-presets">
+ <h4>⏰ 时段预设（配合观察天空变化）</h4>
+ <div class="preset-row">
+ <button data-hour="6">🌅 06:00 日出</button>
+ <button data-hour="9">☀️ 09:00</button>
+ <button data-hour="12">☀️ 12:00 正午</button>
+ <button data-hour="15">🌤️ 15:00</button>
+ <button data-hour="18">🌇 18:00 日落</button>
+ <button data-hour="21">🌙 21:00 夜晚</button>
+ <button data-hour="0">🌙 00:00 深夜</button>
+ </div>
+ </div>
+
+ <div class="info-card" id="infoCard">
+ <div class="label">当前天空状态</div>
+ <div class="value" id="infoText">大气：开启 | 星空：开启 | 背景：默认</div>
+ </div>
+</div>
+
+<div class="status-text" id="statusText">天空状态：大气✅ 星空✅ | 提示：选择透明背景并开启透明度合成观察融合效果</div>
+
+<div id="mapContainer"></div>
+
+<script type="module">
+ const Map = await $arcgis.import("@arcgis/core/Map.js");
+ const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
+ const GraphicsLayer = await $arcgis.import("@arcgis/core/layers/GraphicsLayer.js");
+ const Graphic = await $arcgis.import("@arcgis/core/Graphic.js");
+ const Mesh = await $arcgis.import("@arcgis/core/geometry/Mesh.js");
+ const Point = await $arcgis.import("@arcgis/core/geometry/Point.js");
+ const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
+
+ // 天地图底图 + 高程
+ const vecLayers = getTianditu.default({ type: "vec_w" });
+ const map = new Map({
+ basemap: { baseLayers: [vecLayers.base, vecLayers.anno] },
+ ground: {
+ surface: {
+ elevationLayers: [{
+ url: "https://www.geosceneonline.cn/image/rest/services/OpenData/ChinaTerrain3D/ImageServer/"
+ }]
+ }
+ }
+ });
+
+ const view = new SceneView({
+ container: "mapContainer",
+ map: map,
+ center: [118.08, 30.33], // 黄山区域
+ zoom: 16,
+ tilt: 55,
+ alphaCompositingEnabled: false // 默认关闭，仅在透明背景时开启
+ });
+
+ window.view = view;
+
+ // ===== 背景颜色预设表 =====
+ const bgPresets = {
+ default: { color: [0, 0, 0, 1], label: "默认" },
+ white: { color: [255, 252, 244, 1], label: "米白色" },
+ skyblue: { color: [135, 206, 235, 1], label: "天空蓝" },
+ darkgray: { color: [40, 40, 40, 1], label: "深灰" },
+ transparent: { color: [0, 0, 0, 0], label: "透明" },
+ semitransparent: { color: [0, 0, 0, 0.5], label: "半透明黑" }
+ };
+
+ // ===== 应用自定义背景颜色 =====
+ function applyBackground(presetKey) {
+ const preset = bgPresets[presetKey];
+ const isTransparent = (presetKey === "transparent" || presetKey === "semitransparent");
+
+ // 启用/禁用透明度合成（仅在透明/半透明时需要）
+ if (isTransparent) {
+ document.getElementById("chkAlphaCompositing").checked = true;
+ view.alphaCompositingEnabled = true;
+ } else {
+ document.getElementById("chkAlphaCompositing").checked = false;
+ view.alphaCompositingEnabled = false;
+ }
+
+ // 设置背景颜色（ColorBackground，需关闭星空和大气）
+ view.environment.background = {
+ type: "color",
+ color: preset.color
+ };
+ view.environment.starsEnabled = false;
+ view.environment.atmosphereEnabled = false;
+
+ // 同步复选框状态
+ document.getElementById("chkStars").checked = false;
+ document.getElementById("chkAtmosphere").checked = false;
+ }
+
+ // ===== 恢复默认天空（星空+大气）=====
+ function restoreDefaultSky() {
+ view.environment.background = null;
+ view.environment.starsEnabled = true;
+ view.environment.atmosphereEnabled = true;
+ view.alphaCompositingEnabled = false;
+
+ document.getElementById("chkStars").checked = true;
+ document.getElementById("chkAtmosphere").checked = true;
+ document.getElementById("chkAlphaCompositing").checked = false;
+ document.getElementById("selBackground").value = "default";
+ }
+
+ // ===== 添加 3D 参照物 =====
+ function addReferenceObjects() {
+ const layer = new GraphicsLayer({
+ title: "参照物体",
+ castShadows: true,
+ receiveShadows: true
+ });
+
+ // 近处物体（清晰）
+ const nearBox = new Graphic({
+ geometry: Mesh.createBox(
+ new Point({ longitude: 118.080, latitude: 30.330, z: 0 }),
+ { size: { width: 300, height: 400, depth: 300 } }
+ ),
+ symbol: {
+ type: "mesh-3d",
+ symbolLayers: [{ type: "fill", material: { color: [220, 180, 140, 0.9] } }]
+ }
+ });
+
+ // 远处物体1 — 用于观察大气雾化/自定义背景效果
+ const farBox1 = new Graphic({
+ geometry: Mesh.createBox(
+ new Point({ longitude: 118.085, latitude: 30.332, z: 0 }),
+ { size: { width: 200, height: 300, depth: 200 } }
+ ),
+ symbol: {
+ type: "mesh-3d",
+ symbolLayers: [{ type: "fill", material: { color: [180, 200, 220, 0.9] } }]
+ }
+ });
+
+ // 远处物体2
+ const farBox2 = new Graphic({
+ geometry: Mesh.createBox(
+ new Point({ longitude: 118.075, latitude: 30.327, z: 0 }),
+ { size: { width: 150, height: 250, depth: 150 } }
+ ),
+ symbol: {
+ type: "mesh-3d",
+ symbolLayers: [{ type: "fill", material: { color: [200, 160, 120, 0.9] } }]
+ }
+ });
+
+ layer.addMany([nearBox, farBox1, farBox2]);
+ map.add(layer);
+ console.log("参照物体已添加到场景");
+ }
+
+ // ===== 设置光照时间 =====
+ function applyTime(hour) {
+ const d = new Date();
+ d.setHours(Math.floor(hour), Math.round((hour % 1) * 60), 0, 0);
+ view.environment.lighting = {
+ type: "sun",
+ date: d,
+ directShadowsEnabled: true
+ };
+ }
+
+ // ===== 初始化 =====
+ view.when(() => {
+ console.log("场景加载完成");
+ addReferenceObjects();
+ applyTime(14);
+
+ // 大气效果开关 — 仅在非自定义背景模式下生效
+ document.getElementById("chkAtmosphere").addEventListener("change", (e) => {
+ const bgSelect = document.getElementById("selBackground").value;
+ if (bgSelect !== "default") {
+ // 自定义背景模式下不允许单独开大气
+ restoreDefaultSky();
+ view.environment.atmosphereEnabled = e.target.checked;
+ view.environment.starsEnabled = document.getElementById("chkStars").checked;
+ } else {
+ view.environment.atmosphereEnabled = e.target.checked;
+ }
+ updateAll();
+ });
+
+ // 星空开关
+ document.getElementById("chkStars").addEventListener("change", (e) => {
+ const bgSelect = document.getElementById("selBackground").value;
+ if (bgSelect !== "default") {
+ restoreDefaultSky();
+ view.environment.starsEnabled = e.target.checked;
+ view.environment.atmosphereEnabled = document.getElementById("chkAtmosphere").checked;
+ } else {
+ view.environment.starsEnabled = e.target.checked;
+ }
+ updateAll();
+ });
+
+ // 背景颜色选择器
+ document.getElementById("selBackground").addEventListener("change", (e) => {
+ const key = e.target.value;
+ if (key === "default") {
+ restoreDefaultSky();
+ } else {
+ applyBackground(key);
+ }
+ updateAll();
+ });
+
+ // 透明度合成开关
+ document.getElementById("chkAlphaCompositing").addEventListener("change", (e) => {
+ view.alphaCompositingEnabled = e.target.checked;
+ updateAll();
+ });
+
+ // 时段预设按钮
+ document.querySelectorAll(".preset-row button").forEach(btn => {
+ btn.addEventListener("click", () => {
+ const hour = parseFloat(btn.dataset.hour);
+ applyTime(hour);
+ clearActive();
+ btn.classList.add("active");
+ updateAll();
+ });
+ });
+
+ updateAll();
+ });
+
+ function clearActive() {
+ document.querySelectorAll(".preset-row button").forEach(b => b.classList.remove("active"));
+ }
+
+ function updateAll() {
+ const atmosphereOn = view.environment.atmosphereEnabled;
+ const starsOn = view.environment.starsEnabled;
+ const alphaOn = view.alphaCompositingEnabled;
+ const bgSelect = document.getElementById("selBackground").value;
+ const bgLabel = (bgSelect === "default") ? "默认" : bgPresets[bgSelect].label;
+
+ const lighting = view.environment.lighting;
+ const hour = lighting.date ? formatHour(lighting.date.getHours() + lighting.date.getMinutes() / 60) : "--:--";
+
+ // 判断时段
+ const h = lighting.date ? lighting.date.getHours() : 14;
+ const isLowLight = (h >= 20 || h <= 5);
+ const isTwilight = (h >= 6 && h <= 7) || (h >= 17 && h <= 19);
+
+ let hint = "";
+ if (bgSelect !== "default") {
+ hint = `🎨 自定义背景：${bgLabel}` + (alphaOn ? " | 透明度合成已开启" : "");
+ } else if (starsOn && isLowLight) {
+ hint = "✨ 夜空模式：星星可见";
+ } else if (starsOn && isTwilight) {
+ hint = "🌅 晨昏模式：星星渐显渐隐";
+ } else if (starsOn && !isLowLight && !isTwilight) {
+ hint = "☀️ 白天模式：星星不可见（正常）";
+ } else {
+ hint = "🌟 星星已关闭";
+ }
+
+ if (!atmosphereOn && bgSelect === "default") {
+ hint += " | ⚡ 大气已关闭（性能模式）";
+ }
+
+ // 更新信息卡片
+ document.getElementById("infoText").textContent =
+ `大气：${atmosphereOn ? "开启" : "关闭"} | 星空：${starsOn ? "开启" : "关闭"} | 背景：${bgLabel} | 时间：${hour}`;
+
+ document.getElementById("statusText").textContent =
+ `天空状态：大气${atmosphereOn ? "✅" : "❌"} 星空${starsOn ? "✅" : "❌"} | ${hint}`;
+ }
+
+ function formatHour(hour) {
+ const h = Math.floor(hour);
+ const m = Math.round((hour % 1) * 60);
+ return String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0");
+ }
+</script>
+</body>
+</html>
