@@ -263,16 +263,6 @@
  addReferenceObjects();
  }
 
- // ===== 应用相机参数 =====
- function applyCamera(heading, tilt, fov, altitude) {
- const cam = view.camera.clone();
- cam.heading = heading;
- cam.tilt = tilt;
- cam.fov = fov;
- cam.position.z = altitude;
- view.camera = cam;
- }
-
  // ===== 初始化 UI =====
  view.when(() => {
  console.log("场景加载完成");
@@ -304,7 +294,9 @@
 
  // Heading 滑块
  initSlider("sliderHeading", "valHeading", (v) => {
- view.camera.heading = v;
+ const cam = view.camera.clone();
+ cam.heading = v;
+ view.camera = cam;
  updateAll();
  });
 
@@ -314,14 +306,18 @@
  const v = parseInt(btn.dataset.heading);
  document.getElementById("sliderHeading").value = v;
  document.getElementById("valHeading").textContent = v + "°";
- view.camera.heading = v;
+ const cam = view.camera.clone();
+ cam.heading = v;
+ view.camera = cam;
  updateAll();
  });
  });
 
  // Tilt 滑块
  initSlider("sliderTilt", "valTilt", (v) => {
- view.camera.tilt = v;
+ const cam = view.camera.clone();
+ cam.tilt = v;
+ view.camera = cam;
  updateAll();
  });
 
@@ -330,14 +326,18 @@
  const v = parseInt(btn.dataset.tilt);
  document.getElementById("sliderTilt").value = v;
  document.getElementById("valTilt").textContent = v + "°";
- view.camera.tilt = v;
+ const cam = view.camera.clone();
+ cam.tilt = v;
+ view.camera = cam;
  updateAll();
  });
  });
 
  // FOV 滑块
  initSlider("sliderFov", "valFov", (v) => {
- view.camera.fov = v;
+ const cam = view.camera.clone();
+ cam.fov = v;
+ view.camera = cam;
  updateAll();
  });
 
@@ -346,14 +346,18 @@
  const v = parseInt(btn.dataset.fov);
  document.getElementById("sliderFov").value = v;
  document.getElementById("valFov").textContent = v + "°";
- view.camera.fov = v;
+ const cam = view.camera.clone();
+ cam.fov = v;
+ view.camera = cam;
  updateAll();
  });
  });
 
  // Altitude 滑块
  initSlider("sliderAltitude", "valAltitude", (v) => {
- view.camera.position.z = v;
+ const cam = view.camera.clone();
+ cam.position.z = v;
+ view.camera = cam;
  updateAll();
  });
 
@@ -401,9 +405,11 @@
  document.getElementById("btnAutoRotate").classList.remove("primary");
  } else {
  autoRotateInterval = setInterval(() => {
- view.camera.heading = (view.camera.heading + 0.5) % 360;
- document.getElementById("sliderHeading").value = Math.round(view.camera.heading);
- document.getElementById("valHeading").textContent = Math.round(view.camera.heading) + "°";
+ const cam = view.camera.clone();
+ cam.heading = (cam.heading + 0.5) % 360;
+ view.camera = cam;
+ document.getElementById("sliderHeading").value = Math.round(cam.heading);
+ document.getElementById("valHeading").textContent = Math.round(cam.heading) + "°";
  updateInfo();
  updateStatusText();
  }, 50);
