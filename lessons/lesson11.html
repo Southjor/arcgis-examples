@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>第11课：飞行定位 goTo</title>
+ <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css">
+ <script type="module" src="https://js.arcgis.com/5.0/"></script>
+ <style>
+ * { margin: 0; padding: 0; box-sizing: border-box; }
+ body { font-family: "Microsoft YaHei", sans-serif; }
+ #mapContainer { width: 100vw; height: 100vh; }
+ .page-title {
+ position: absolute;
+ top: 20px; left: 50%;
+ transform: translateX(-50%);
+ background: rgba(255,255,255,0.95);
+ padding: 10px 24px; border-radius: 6px;
+ font-size: 18px; font-weight: bold;
+ z-index: 100;
+ box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+ }
+ .control-panel {
+ position: absolute;
+ top: 80px; right: 20px;
+ background: rgba(255,255,255,0.95);
+ padding: 16px; border-radius: 8px;
+ box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+ z-index: 100; min-width: 320px; max-height: 85vh; overflow-y: auto;
+ }
+ .control-panel h3 { margin: 0 0 8px 0; font-size: 14px; color: #333; }
+ .section { margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+ .section:last-child { border-bottom: none; margin-bottom: 0; }
+ .preset-row { display: flex; gap: 6px; flex-wrap: wrap; }
+ .preset-row button {
+ padding: 6px 12px; font-size: 12px;
+ border: 1px solid #d9d9d9; border-radius: 4px;
+ background: white; cursor: pointer;
+ transition: all 0.2s;
+ }
+ .preset-row button:hover { border-color: #1890ff; color: #1890ff; }
+ .preset-row button.active { background: #1890ff; color: white; border-color: #1890ff; }
+ .preset-row button.flying { background: #ff9800; color: white; border-color: #ff9800; animation: pulse 1s infinite; }
+ @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.6; } }
+ .btn-full { width: 100%; margin-top: 6px; }
+ .btn-full button {
+ width: 100%; padding: 8px 0;
+ border: 1px solid #d9d9d9; border-radius: 4px;
+ background: white; cursor: pointer; font-size: 13px;
+ }
+ .btn-full button:hover { border-color: #1890ff; color: #1890ff; }
+ .btn-full button.cancel { border-color: #ff4d4f; color: #ff4d4f; }
+ .form-group { margin-bottom: 10px; }
+ .form-group label { display: block; font-size: 12px; color: #666; margin-bottom: 4px; }
+ .form-group label span { float: right; font-weight: bold; color: #1890ff; }
+ .form-group input[type="range"] { width: 100%; }
+ .form-group select { width: 100%; padding: 4px 8px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 12px; }
+ .info-card {
+ margin-top: 10px; padding: 10px 12px;
+ background: #f0f5ff; border-radius: 6px;
+ border-left: 3px solid #1890ff;
+ font-size: 12px; color: #333; line-height: 1.6;
+ }
+ .info-card .status { font-weight: bold; color: #1890ff; }
+ .status-text {
+ position: absolute; bottom: 20px; left: 50%;
+ transform: translateX(-50%);
+ background: rgba(0,0,0,0.7); color: white;
+ padding: 8px 20px; border-radius: 20px;
+ font-size: 13px; z-index: 100; pointer-events: none;
+ white-space: nowrap;
+ transition: all 0.3s;
+ }
+ </style>
+</head>
+<body>
+<h1 class="page-title">第11课：飞行定位 goTo</h1>
+
+<div class="control-panel">
+ <div class="section">
+ <h3>📍 目标类型演示</h3>
+ <div class="preset-row">
+ <button data-target="point">点定位</button>
+ <button data-target="polyline">线框选</button>
+ <button data-target="polygon">面框选</button>
+ <button data-target="extent">范围框选</button>
+ <button data-target="coordinate">坐标定位</button>
+ </div>
+ </div>
+
+ <div class="section">
+ <h3>🌍 城市快速跳转</h3>
+ <div class="preset-row">
+ <button data-city="beijing">🏯 北京</button>
+ <button data-city="shanghai">🌆 上海</button>
+ <button data-city="guangzhou">🗼 广州</button>
+ <button data-city="lasvegas">🎰 拉斯维加斯</button>
+ </div>
+ </div>
+
+ <div class="section">
+ <h3>🎬 动画参数</h3>
+ <div class="form-group">
+ <label>飞行时间：<span id="valDuration">2.0s</span></label>
+ <input type="range" id="sliderDuration" min="0.5" max="10" value="2" step="0.5">
+ </div>
+ <div class="form-group">
+ <label>速度因子：<span id="valSpeed">1.0x</span></label>
+ <input type="range" id="sliderSpeed" min="0.1" max="6" value="1" step="0.1">
+ </div>
+ <div class="form-group">
+ <label>缓动函数：</label>
+ <select id="selEasing">
+ <option value="cubic-out">cubic-out（先快后慢）</option>
+ <option value="linear">linear（匀速）</option>
+ <option value="expo-in">expo-in（指数加速）</option>
+ <option value="expo-out">expo-out（指数减速）</option>
+ <option value="in-out">in-out（加速后减速）</option>
+ </select>
+ </div>
+ </div>
+
+ <div class="section">
+ <h3>📐 目标视角</h3>
+ <div class="form-group">
+ <label>heading：<span id="valHeading">0°</span></label>
+ <input type="range" id="sliderHeading" min="0" max="360" value="0" step="5">
+ </div>
+ <div class="form-group">
+ <label>tilt：<span id="valTilt">45°</span></label>
+ <input type="range" id="sliderTilt" min="0" max="90" value="45" step="5">
+ </div>
+ </div>
+
+ <div class="btn-full">
+ <button id="btnAutoTour">🚁 自动巡检（链式飞行）</button>
+ </div>
+ <div class="btn-full">
+ <button id="btnCancel" class="cancel">⏹ 取消飞行</button>
+ </div>
+
+ <div class="info-card" id="infoCard">
+ <span class="status" id="flightStatus">⏸ 待命</span>
+ <br>当前：<span id="infoPos">--</span>
+ </div>
+</div>
+
+<div class="status-text" id="statusText">goTo 飞行定位 | 点击按钮开始演示</div>
+
+<div id="mapContainer"></div>
+
+<script type="module">
+ const Map = await $arcgis.import("@arcgis/core/Map.js");
+ const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
+ const Camera = await $arcgis.import("@arcgis/core/Camera.js");
+ const Point = await $arcgis.import("@arcgis/core/geometry/Point.js");
+ const Polyline = await $arcgis.import("@arcgis/core/geometry/Polyline.js");
+ const Polygon = await $arcgis.import("@arcgis/core/geometry/Polygon.js");
+ const Extent = await $arcgis.import("@arcgis/core/geometry/Extent.js");
+ const GraphicsLayer = await $arcgis.import("@arcgis/core/layers/GraphicsLayer.js");
+ const Graphic = await $arcgis.import("@arcgis/core/Graphic.js");
+ const Mesh = await $arcgis.import("@arcgis/core/geometry/Mesh.js");
+ const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
+
+ // 天地图底图 + 高程
+ const vecLayers = getTianditu.default({ type: "vec_w" });
+ const map = new Map({
+ basemap: { baseLayers: [vecLayers.base, vecLayers.anno] },
+ ground: {
+ surface: {
+ elevationLayers: [{
+ url: "https://www.geosceneonline.cn/image/rest/services/OpenData/ChinaTerrain3D/ImageServer/"
+ }]
+ }
+ }
+ });
+
+ const view = new SceneView({
+ container: "mapContainer",
+ map: map,
+ camera: {
+ position: { longitude: 116.397, latitude: 39.917, z: 5000 },
+ heading: 0,
+ tilt: 45
+ }
+ });
+
+ window.view = view;
+
+ let abortController = null;
+ let isFlying = false;
+
+ // ===== 城市坐标预设 =====
+ const cities = {
+ beijing: { lng: 116.397, lat: 39.917, zoom: 15 },
+ shanghai: { lng: 121.491, lat: 31.240, zoom: 15 },
+ guangzhou: { lng: 113.324, lat: 23.109, zoom: 15 },
+ lasvegas: { lng: -115.172, lat: 36.114, zoom: 14 }
+ };
+
+ // ===== 添加参照几何对象到场景 =====
+ function addReferenceGeometries() {
+ const layer = new GraphicsLayer({ title: "参照几何" });
+
+ // 红色圆点 — 点标记
+ layer.add(new Graphic({
+ geometry: new Point({ longitude: 116.397, latitude: 39.920 }),
+ symbol: {
+ type: "point-3d",
+ symbolLayers: [{
+ type: "icon",
+ size: 24,
+ resource: { primitive: "circle" },
+ material: { color: [255, 50, 50] }
+ }]
+ }
+ }));
+
+ // 橙色折线
+ layer.add(new Graphic({
+ geometry: new Polyline({
+ paths: [[[116.393, 39.914], [116.398, 39.918], [116.403, 39.914], [116.405, 39.920]]]
+ }),
+ symbol: {
+ type: "line-3d",
+ symbolLayers: [{ type: "line", size: 3, material: { color: [255, 165, 0] } }]
+ }
+ }));
+
+ // 蓝色半透明面
+ layer.add(new Graphic({
+ geometry: new Polygon({
+ rings: [[[116.388, 39.912], [116.395, 39.910], [116.396, 39.916], [116.390, 39.918]]]
+ }),
+ symbol: {
+ type: "polygon-3d",
+ symbolLayers: [{
+ type: "fill",
+ material: { color: [0, 120, 255, 0.25] },
+ outline: { color: [0, 120, 255, 0.8], size: 1.5 }
+ }]
+ }
+ }));
+
+ map.add(layer);
+ console.log("参照几何已添加到场景");
+
+ // 3D 参照物（金色方块）
+ const objLayer = new GraphicsLayer({
+ title: "3D物体",
+ castShadows: true,
+ receiveShadows: true
+ });
+ objLayer.add(new Graphic({
+ geometry: Mesh.createBox(
+ new Point({ longitude: 116.397, latitude: 39.917, z: 0 }),
+ { size: { width: 300, height: 400, depth: 300 } }
+ ),
+ symbol: {
+ type: "mesh-3d",
+ symbolLayers: [{ type: "fill", material: { color: [220, 180, 100, 0.85] } }]
+ }
+ }));
+ map.add(objLayer);
+ }
+
+ // ===== goTo 操作封装 =====
+ async function doGoTo(target, cityLabel) {
+ // 先取消前次飞行
+ cancelFlight();
+
+ const duration = parseFloat(document.getElementById("sliderDuration").value) * 1000;
+ const speedFactor = parseFloat(document.getElementById("sliderSpeed").value);
+ const easing = document.getElementById("selEasing").value;
+ const heading = parseInt(document.getElementById("sliderHeading").value);
+ const tilt = parseInt(document.getElementById("sliderTilt").value);
+
+ // 对坐标对象附加 heading/tilt
+ let finalTarget = target;
+ if (typeof target === "object"
+ && !(target instanceof Point)
+ && !(target instanceof Polyline)
+ && !(target instanceof Polygon)
+ && !(target instanceof Extent)
+ && !(target instanceof Camera)) {
+ finalTarget = { ...target, heading, tilt };
+ }
+
+ abortController = new AbortController();
+ isFlying = true;
+ updateFlightStatus("🛫 飞行中" + (cityLabel ? " → " + cityLabel : ""));
+ setFlyingClass(true);
+
+ try {
+ await view.goTo(finalTarget, {
+ animate: true,
+ duration: duration,
+ speedFactor: (duration > 0) ? undefined : speedFactor,
+ easing: easing,
+ signal: abortController.signal
+ });
+ updateFlightStatus("✅ 已到达" + (cityLabel ? " " + cityLabel : ""));
+ } catch (err) {
+ if (err.name === "AbortError") {
+ updateFlightStatus("⏹ 已取消");
+ } else {
+ console.error(err);
+ updateFlightStatus("❌ 飞行失败");
+ }
+ } finally {
+ isFlying = false;
+ setFlyingClass(false);
+ abortController = null;
+ }
+ updatePositionInfo();
+ }
+
+ function cancelFlight() {
+ if (abortController) {
+ abortController.abort();
+ abortController = null;
+ }
+ isFlying = false;
+ setFlyingClass(false);
+ }
+
+ // ===== UI 更新函数 =====
+ function updateFlightStatus(msg) {
+ document.getElementById("flightStatus").textContent = msg;
+ document.getElementById("statusText").textContent = "goTo | " + msg;
+ }
+
+ function updatePositionInfo() {
+ const cam = view.camera;
+ document.getElementById("infoPos").textContent =
+ `经度 ${cam.position.longitude.toFixed(4)}, 纬度 ${cam.position.latitude.toFixed(4)}, 高度 ${Math.round(cam.position.z)}m`;
+ }
+
+ function setFlyingClass(flying) {
+ document.querySelectorAll(".preset-row button, .btn-full button").forEach(b => {
+ if (flying) b.classList.add("flying");
+ else b.classList.remove("flying");
+ });
+ }
+
+ // ===== 初始化 =====
+ view.when(() => {
+ console.log("场景加载完成");
+ addReferenceGeometries();
+ initUI();
+ updatePositionInfo();
+ });
+
+ function initUI() {
+ // 几何目标类型按钮
+ const beijingCenter = { lng: 116.397, lat: 39.917 };
+ const geometryTargets = {
+ point: {
+ target: new Point({ longitude: beijingCenter.lng, latitude: beijingCenter.lat + 0.003 }),
+ label: "点"
+ },
+ polyline: {
+ target: new Polyline({
+ paths: [[[116.393, 39.914], [116.398, 39.918], [116.403, 39.914], [116.405, 39.920]]]
+ }),
+ label: "线"
+ },
+ polygon: {
+ target: new Polygon({
+ rings: [[[116.388, 39.912], [116.395, 39.910], [116.396, 39.916], [116.390, 39.918]]]
+ }),
+ label: "面"
+ },
+ extent: {
+ target: new Extent({
+ xmin: 116.386, ymin: 39.910, xmax: 116.408, ymax: 39.924,
+ spatialReference: { wkid: 4326 }
+ }),
+ label: "范围"
+ },
+ coordinate: {
+ target: { center: [116.397, 39.917], zoom: 17 },
+ label: "坐标"
+ }
+ };
+
+ document.querySelectorAll("[data-target]").forEach(btn => {
+ btn.addEventListener("click", () => {
+ const key = btn.dataset.target;
+ const g = geometryTargets[key];
+ doGoTo(g.target, g.label);
+ });
+ });
+
+ // 城市跳转按钮
+ document.querySelectorAll("[data-city]").forEach(btn => {
+ btn.addEventListener("click", () => {
+ const city = cities[btn.dataset.city];
+ doGoTo(
+ { center: [city.lng, city.lat], zoom: city.zoom },
+ btn.textContent.trim()
+ );
+ });
+ });
+
+ // 自动巡检（链式飞行）
+ document.getElementById("btnAutoTour").addEventListener("click", async () => {
+ cancelFlight();
+ const easing = document.getElementById("selEasing").value;
+ const heading = parseInt(document.getElementById("sliderHeading").value);
+ const tilt = parseInt(document.getElementById("sliderTilt").value);
+
+ const tourStops = [
+ { label: "北京", target: { center: [116.397, 39.917], zoom: 15, heading, tilt } },
+ { label: "上海", target: { center: [121.491, 31.240], zoom: 15, heading, tilt } },
+ { label: "广州", target: { center: [113.324, 23.109], zoom: 15, heading, tilt } }
+ ];
+
+ isFlying = true;
+ setFlyingClass(true);
+ updateFlightStatus("🛫 巡检开始 → 北京");
+
+ for (let i = 0; i < tourStops.length; i++) {
+ const stop = tourStops[i];
+ abortController = new AbortController();
+ try {
+ await view.goTo(stop.target, {
+ duration: 4000,
+ easing: easing,
+ signal: abortController.signal
+ });
+ updateFlightStatus("📍 " + stop.label);
+ } catch (err) {
+ if (err.name === "AbortError") {
+ updateFlightStatus("⏹ 巡检中断");
+ break;
+ } else {
+ throw err;
+ }
+ }
+ updatePositionInfo();
+ }
+
+ if (isFlying) updateFlightStatus("✅ 巡检完成");
+ isFlying = false;
+ setFlyingClass(false);
+ abortController = null;
+ });
+
+ // 取消飞行按钮
+ document.getElementById("btnCancel").addEventListener("click", cancelFlight);
+
+ // 滑块值更新
+ document.getElementById("sliderDuration").addEventListener("input", (e) => {
+ document.getElementById("valDuration").textContent = parseFloat(e.target.value).toFixed(1) + "s";
+ });
+ document.getElementById("sliderSpeed").addEventListener("input", (e) => {
+ document.getElementById("valSpeed").textContent = parseFloat(e.target.value).toFixed(1) + "x";
+ });
+ document.getElementById("sliderHeading").addEventListener("input", (e) => {
+ document.getElementById("valHeading").textContent = e.target.value + "°";
+ });
+ document.getElementById("sliderTilt").addEventListener("input", (e) => {
+ document.getElementById("valTilt").textContent = e.target.value + "°";
+ });
+ }
+</script>
+</body>
+</html>
