@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>第13课：屏幕坐标与地理坐标互转</title>
+    <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css">
+    <script type="module" src="https://js.arcgis.com/5.0/"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: "Microsoft YaHei", sans-serif;
+        }
+
+        #mapContainer {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .page-title {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.95);
+            padding: 10px 24px;
+            border-radius: 6px;
+            font-size: 18px;
+            font-weight: bold;
+            z-index: 100;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .control-panel {
+            position: absolute;
+            top: 80px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 16px;
+            border-radius: 8px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+            z-index: 100;
+            min-width: 320px;
+        }
+
+        .control-panel h3 {
+            margin: 0 0 8px 0;
+            font-size: 14px;
+            color: #333;
+        }
+
+        .section {
+            margin-bottom: 12px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .section:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+
+        .info-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 4px;
+            font-size: 12px;
+        }
+
+        .info-row .label {
+            color: #666;
+            min-width: 60px;
+        }
+
+        .info-row .value {
+            font-weight: bold;
+            color: #1890ff;
+            font-family: monospace;
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .btn-row button {
+            flex: 1;
+            padding: 7px 0;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+            background: white;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        .btn-row button:hover {
+            border-color: #1890ff;
+            color: #1890ff;
+        }
+
+        .btn-row button.primary {
+            background: #1890ff;
+            color: white;
+            border-color: #1890ff;
+        }
+
+        .btn-row button.danger {
+            border-color: #ff4d4f;
+            color: #ff4d4f;
+        }
+
+        .form-group {
+            margin-bottom: 8px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 3px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 5px 8px;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        .form-group input:focus {
+            border-color: #1890ff;
+            outline: none;
+        }
+
+        .status-bar {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.75);
+            color: white;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 13px;
+            z-index: 100;
+            display: flex;
+            gap: 20px;
+            white-space: nowrap;
+        }
+
+        .status-bar .coord-item {
+            font-family: monospace;
+        }
+
+        .status-bar .coord-item span {
+            color: #40a9ff;
+            font-weight: bold;
+        }
+
+        .crosshair {
+            position: absolute;
+            z-index: 99;
+            pointer-events: none;
+            width: 30px;
+            height: 30px;
+            border-left: 2px dashed rgba(24, 144, 255, 0.7);
+            border-top: 2px dashed rgba(24, 144, 255, 0.7);
+            display: none;
+        }
+
+        .click-hint {
+            position: absolute;
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(24, 144, 255, 0.9);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 3px;
+            font-size: 12px;
+            z-index: 101;
+            pointer-events: none;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+<h1 class="page-title">第13课：屏幕坐标与地理坐标互转</h1>
+
+<div class="crosshair" id="crosshair"></div>
+<div class="click-hint" id="clickHint">点击地图获取该点地理坐标</div>
+
+<div class="control-panel">
+    <div class="section">
+        <h3>📍 点击地图获取坐标（toMap）</h3>
+        <div class="info-row"><span class="label">屏幕坐标：</span><span class="value" id="screenCoords">--</span></div>
+        <div class="info-row"><span class="label">经度：</span><span class="value" id="lngCoord">--</span></div>
+        <div class="info-row"><span class="label">纬度：</span><span class="value" id="latCoord">--</span></div>
+        <div class="info-row"><span class="label">高程：</span><span class="value" id="elevCoord">--</span></div>
+    </div>
+
+    <div class="section">
+        <h3>🎯 坐标反查（输入坐标定位）</h3>
+        <div class="form-group">
+            <label>经度（如 116.397）：</label>
+            <input type="number" id="inputLng" placeholder="118.080" step="0.001">
+        </div>
+        <div class="form-group">
+            <label>纬度（如 39.917）：</label>
+            <input type="number" id="inputLat" placeholder="30.330" step="0.001">
+        </div>
+        <div class="btn-row">
+            <button id="btnLocate" class="primary">🚀 飞到坐标</button>
+            <button id="btnToScreen">📺 查屏幕位置</button>
+        </div>
+    </div>
+
+    <div class="section">
+        <h3>🔴 标记管理</h3>
+        <div class="btn-row">
+            <button id="btnClearMarks" class="danger">🗑 清除所有标记</button>
+        </div>
+    </div>
+</div>
+
+<div class="status-bar" id="statusBar">
+    <div class="coord-item">鼠标：<span id="hoverLng">--</span>, <span id="hoverLat">--</span></div>
+    <div>|</div>
+    <div class="coord-item">高程：<span id="hoverElev">--</span>m</div>
+</div>
+
+<div id="mapContainer"></div>
+
+<script type="module">
+    const Map = await $arcgis.import("@arcgis/core/Map.js");
+    const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
+    const GraphicsLayer = await $arcgis.import("@arcgis/core/layers/GraphicsLayer.js");
+    const IntegratedMesh3DTilesLayer = await $arcgis.import("@arcgis/core/layers/IntegratedMesh3DTilesLayer.js");
+
+    const Graphic = await $arcgis.import("@arcgis/core/Graphic.js");
+    const Point = await $arcgis.import("@arcgis/core/geometry/Point.js");
+    const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
+
+    // 天地图底图 + 高程
+    const vecLayers = getTianditu.default({type: "vec_w"});
+    const map = new Map({
+        basemap: {baseLayers: [vecLayers.base, vecLayers.anno]},
+        ground: {
+            surface: {
+                elevationLayers: [{
+                    url: "https://www.geosceneonline.cn/image/rest/services/OpenData/ChinaTerrain3D/ImageServer/"
+                }]
+            }
+        }
+    });
+
+    const view = new SceneView({
+        container: "mapContainer",
+        map: map,
+        camera: {
+            position: {longitude: 118.080, latitude: 30.330, z: 8000},
+            heading: 0,
+            tilt: 50
+        }
+    });
+    window.view = view;
+
+
+    const layer = new IntegratedMesh3DTilesLayer({
+        url: "http://openlayers.vip/cesium/3dtile/xianggang_1.1/tileset.json",
+    });
+    map.add(layer);
+
+    await view.when();
+
+    // 等待 3D Tiles 图层加载，获取其范围
+    await view.whenLayerView(layer);
+
+    // 定位至图层范围
+    view.goTo({
+        target: layer.fullExtent,
+        tilt: 55
+    }, {duration: 1500});
+
+
+    // 标记图层
+    const markerLayer = new GraphicsLayer({title: "点击标记"});
+    map.add(markerLayer);
+
+    // DOM 元素
+    const crosshair = document.getElementById("crosshair");
+    const clickHint = document.getElementById("clickHint");
+
+    // ===== toMap：屏幕坐标 → 地理坐标 =====
+    function screenToMap(screenX, screenY) {
+        return view.toMap({x: screenX, y: screenY});
+    }
+
+    // ===== toScreen：地理坐标 → 屏幕坐标 =====
+    function mapToScreen(longitude, latitude) {
+        const pt = new Point({longitude, latitude});
+        return view.toScreen(pt);
+    }
+
+    // ===== 更新右侧面板坐标信息 =====
+    function updateClickInfo(screenX, screenY, mapPoint) {
+        document.getElementById("screenCoords").textContent =
+            `(${Math.round(screenX)}, ${Math.round(screenY)})`;
+        document.getElementById("lngCoord").textContent =
+            mapPoint.longitude.toFixed(6) + "°";
+        document.getElementById("latCoord").textContent =
+            mapPoint.latitude.toFixed(6) + "°";
+        document.getElementById("elevCoord").textContent =
+            (mapPoint.z != null) ? mapPoint.z.toFixed(2) + " m" : "无高程数据";
+    }
+
+    // ===== 添加红色双圈标记 =====
+    function addMarker(mapPoint) {
+        // 内圈实心红点
+        markerLayer.add(new Graphic({
+            geometry: mapPoint,
+            symbol: {
+                type: "point-3d",
+                symbolLayers: [{
+                    type: "icon",
+                    resource: {primitive: "circle"},
+                    size: 18,
+                    material: {color: [255, 50, 50]},
+                    outline: {color: [255, 255, 255], size: 1.5}
+                }]
+            }
+        }));
+        // 外圈半透明白色
+        markerLayer.add(new Graphic({
+            geometry: mapPoint,
+            symbol: {
+                type: "point-3d",
+                symbolLayers: [{
+                    type: "icon",
+                    resource: {primitive: "circle"},
+                    size: 28,
+                    material: {color: [255, 255, 255, 0.4]}
+                }]
+            }
+        }));
+    }
+
+    // ===== 初始化 =====
+    view.when(() => {
+        console.log("场景加载完成");
+
+        // ---------- 鼠标移动：实时显示坐标 ----------
+        view.on("pointer-move", (event) => {
+            const mapPoint = screenToMap(event.x, event.y);
+            document.getElementById("hoverLng").textContent = mapPoint.longitude.toFixed(6);
+            document.getElementById("hoverLat").textContent = mapPoint.latitude.toFixed(6);
+            document.getElementById("hoverElev").textContent =
+                (mapPoint.z != null) ? Math.round(mapPoint.z) : "--";
+
+            // 十字准星跟随鼠标
+            crosshair.style.left = (event.x - 15) + "px";
+            crosshair.style.top = (event.y - 15) + "px";
+            crosshair.style.display = "block";
+        });
+
+        view.on("pointer-leave", () => {
+            crosshair.style.display = "none";
+        });
+
+        // ---------- 点击：获取坐标 + 添加标记 ----------
+        view.on("click", (event) => {
+            const mapPoint = screenToMap(event.x, event.y);
+            updateClickInfo(event.x, event.y, mapPoint);
+            addMarker(mapPoint);
+
+            // 显示点击反馈
+            clickHint.style.display = "block";
+            clickHint.style.left = (event.x - 100) + "px";
+            clickHint.style.top = (event.y - 40) + "px";
+            clickHint.textContent =
+                `✅ ${mapPoint.longitude.toFixed(4)}, ${mapPoint.latitude.toFixed(4)}`;
+            setTimeout(() => {
+                clickHint.style.display = "none";
+            }, 1500);
+        });
+
+        // ---------- 按钮：飞到指定坐标 ----------
+        document.getElementById("btnLocate").addEventListener("click", () => {
+            const lng = parseFloat(document.getElementById("inputLng").value);
+            const lat = parseFloat(document.getElementById("inputLat").value);
+            if (isNaN(lng) || isNaN(lat)) {
+                alert("请输入有效的经纬度");
+                return;
+            }
+            view.goTo({
+                center: [lng, lat],
+                zoom: 16
+            }, {
+                duration: 2000,
+                easing: "cubic-out"
+            });
+        });
+
+        // ---------- 按钮：坐标反查屏幕位置 ----------
+        document.getElementById("btnToScreen").addEventListener("click", () => {
+            const lng = parseFloat(document.getElementById("inputLng").value);
+            const lat = parseFloat(document.getElementById("inputLat").value);
+            if (isNaN(lng) || isNaN(lat)) {
+                alert("请输入有效的经纬度");
+                return;
+            }
+            const screenPt = mapToScreen(lng, lat);
+            const inView = screenPt.x >= 0 && screenPt.x <= view.width
+                && screenPt.y >= 0 && screenPt.y <= view.height;
+            alert(
+                `地理坐标：(${lng}, ${lat})\n` +
+                `屏幕坐标：(${Math.round(screenPt.x)}, ${Math.round(screenPt.y)})\n` +
+                (inView ? "✅ 该坐标在视野范围内" : "⚠️ 该坐标不在当前视野范围内")
+            );
+        });
+
+        // ---------- 按钮：清除标记 ----------
+        document.getElementById("btnClearMarks").addEventListener("click", () => {
+            markerLayer.removeAll();
+            document.getElementById("screenCoords").textContent = "--";
+            document.getElementById("lngCoord").textContent = "--";
+            document.getElementById("latCoord").textContent = "--";
+            document.getElementById("elevCoord").textContent = "--";
+        });
+    });
+</script>
+</body>
+</html>
