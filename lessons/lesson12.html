@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>第12课：视图截图 takeScreenshot</title>
+    <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css">
+    <script type="module" src="https://js.arcgis.com/5.0/"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: "Microsoft YaHei", sans-serif; }
+        #mapContainer { width: 100vw; height: 100vh; }
+        .page-title {
+            position: absolute;
+            top: 20px; left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255,255,255,0.95);
+            padding: 10px 24px; border-radius: 6px;
+            font-size: 18px; font-weight: bold;
+            z-index: 100;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .control-panel {
+            position: absolute;
+            top: 80px; right: 20px;
+            background: rgba(255,255,255,0.95);
+            padding: 16px; border-radius: 8px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+            z-index: 100; min-width: 300px;
+        }
+        .control-panel h3 { margin: 0 0 10px 0; font-size: 14px; color: #333; }
+        .section { margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+        .section:last-child { border-bottom: none; margin-bottom: 0; }
+        .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+        .btn-row button {
+            flex: 1; min-width: 80px; padding: 8px 0;
+            border: 1px solid #d9d9d9; border-radius: 4px;
+            background: white; cursor: pointer; font-size: 13px;
+            transition: all 0.2s;
+        }
+        .btn-row button:hover { border-color: #1890ff; color: #1890ff; }
+        .btn-row button.primary { background: #1890ff; color: white; border-color: #1890ff; }
+        .btn-row button.primary:hover { background: #40a9ff; }
+        .form-group { margin-bottom: 10px; }
+        .form-group label { display: block; font-size: 12px; color: #666; margin-bottom: 4px; }
+        .form-group select, .form-group input {
+            width: 100%; padding: 5px 8px; border: 1px solid #d9d9d9;
+            border-radius: 4px; font-size: 12px;
+        }
+        .preview-modal {
+            display: none;
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(0,0,0,0.8); z-index: 999;
+            justify-content: center; align-items: center;
+        }
+        .preview-modal.show { display: flex; }
+        .preview-modal .modal-content {
+            max-width: 90vw; max-height: 90vh;
+            background: white; border-radius: 8px; padding: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            position: relative;
+        }
+        .preview-modal img { max-width: 100%; max-height: 80vh; display: block; }
+        .preview-modal .close-btn {
+            position: absolute; top: -12px; right: -12px;
+            width: 32px; height: 32px; border-radius: 50%;
+            background: #ff4d4f; color: white; border: none;
+            font-size: 18px; cursor: pointer; line-height: 32px; text-align: center;
+        }
+        .preview-modal .modal-actions {
+            margin-top: 10px; display: flex; gap: 8px; justify-content: center;
+        }
+        .preview-modal .modal-actions button {
+            padding: 6px 16px; border: 1px solid #d9d9d9; border-radius: 4px;
+            background: white; cursor: pointer; font-size: 13px;
+        }
+        .preview-modal .modal-actions button:hover { border-color: #1890ff; color: #1890ff; }
+        .status-text {
+            position: absolute; bottom: 20px; left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.7); color: white;
+            padding: 8px 20px; border-radius: 20px;
+            font-size: 13px; z-index: 100; pointer-events: none;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+<h1 class="page-title">第12课：视图截图 takeScreenshot</h1>
+
+<div class="control-panel">
+    <div class="section">
+        <h3>📸 快速操作</h3>
+        <div class="btn-row">
+            <button id="btnScreenshot" class="primary">📸 截图</button>
+            <button id="btnDownload">💾 下载 PNG</button>
+            <button id="btnDownloadJpg">📦 下载 JPG</button>
+        </div>
+        <div class="btn-row" style="margin-top:6px;">
+            <button id="btnPreview">🔍 预览截图</button>
+            <button id="btn4K">🖥️ 4K 高清截图</button>
+        </div>
+    </div>
+
+    <div class="section">
+        <h3>⚙️ 截图参数</h3>
+        <div class="form-group">
+            <label>格式（format）：</label>
+            <select id="selFormat">
+                <option value="png">PNG（无损）</option>
+                <option value="jpg">JPEG（有损压缩）</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>质量（quality，仅 JPEG）：</label>
+            <select id="selQuality">
+                <option value="0.5">低 0.5（文件最小）</option>
+                <option value="0.7">中 0.7</option>
+                <option value="0.85" selected>高 0.85（推荐）</option>
+                <option value="1.0">最高 1.0</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>自定义宽度（像素，留空=视口宽）：</label>
+            <input type="number" id="inputWidth" placeholder="如 1920" min="100" max="7680">
+        </div>
+        <div class="form-group">
+            <label>自定义高度（像素，留空=视口高）：</label>
+            <input type="number" id="inputHeight" placeholder="如 1080" min="100" max="4320">
+        </div>
+    </div>
+</div>
+
+<div class="status-text" id="statusText">📸 takeScreenshot | 点击按钮截图</div>
+
+<div class="preview-modal" id="previewModal">
+    <div class="modal-content">
+        <button class="close-btn" id="btnClosePreview">✕</button>
+        <img id="previewImage" src="" alt="截图预览" />
+        <div class="modal-actions">
+            <button id="btnModalDownload">💾 下载此图</button>
+        </div>
+    </div>
+</div>
+
+<div id="mapContainer"></div>
+
+<script type="module">
+    const Map = await $arcgis.import("@arcgis/core/Map.js");
+    const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
+    const GraphicsLayer = await $arcgis.import("@arcgis/core/layers/GraphicsLayer.js");
+    const Graphic = await $arcgis.import("@arcgis/core/Graphic.js");
+    const Mesh = await $arcgis.import("@arcgis/core/geometry/Mesh.js");
+    const Point = await $arcgis.import("@arcgis/core/geometry/Point.js");
+    const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
+
+    // 天地图底图 + 高程
+    const vecLayers = getTianditu.default({ type: "vec_w" });
+    const map = new Map({
+        basemap: { baseLayers: [vecLayers.base, vecLayers.anno] },
+        ground: {
+            surface: {
+                elevationLayers: [{
+                    url: "https://www.geosceneonline.cn/image/rest/services/OpenData/ChinaTerrain3D/ImageServer/"
+                }]
+            }
+        }
+    });
+
+    const view = new SceneView({
+        container: "mapContainer",
+        map: map,
+        camera: {
+            position: { longitude: 116.397, latitude: 39.917, z: 3000 },
+            heading: 30,
+            tilt: 50
+        }
+    });
+    window.view = view;
+
+    let lastCanvas = null;   // 保存最近一次截图结果
+
+    // ===== 添加 3D 场景元素（让截图更丰富） =====
+    function addSceneObjects() {
+        const layer = new GraphicsLayer({
+            title: "场景元素",
+            castShadows: true,
+            receiveShadows: true
+        });
+
+        // 中心金色大楼
+        layer.add(new Graphic({
+            geometry: Mesh.createBox(
+                new Point({ longitude: 116.397, latitude: 39.917, z: 0 }),
+                { size: { width: 300, height: 500, depth: 300 } }
+            ),
+            symbol: {
+                type: "mesh-3d",
+                symbolLayers: [{ type: "fill", material: { color: [220, 180, 80, 0.9] } }]
+            }
+        }));
+
+        // 周围小建筑群
+        [[0.004, 0.003], [-0.004, 0.002], [0.003, -0.003], [-0.003, -0.002]].forEach(([dx, dy]) => {
+            layer.add(new Graphic({
+                geometry: Mesh.createBox(
+                    new Point({ longitude: 116.397 + dx, latitude: 39.917 + dy, z: 0 }),
+                    { size: { width: 120, height: 200 + Math.random() * 150, depth: 120 } }
+                ),
+                symbol: {
+                    type: "mesh-3d",
+                    symbolLayers: [{
+                        type: "fill",
+                        material: { color: [150 + Math.random() * 80, 160, 200, 0.9] }
+                    }]
+                }
+            }));
+        });
+
+        map.add(layer);
+        console.log("场景元素已添加");
+    }
+
+    // ===== 读取截图参数 =====
+    function getScreenshotOptions() {
+        const format = document.getElementById("selFormat").value;
+        const quality = parseFloat(document.getElementById("selQuality").value);
+        const width = document.getElementById("inputWidth").value
+            ? parseInt(document.getElementById("inputWidth").value) : undefined;
+        const height = document.getElementById("inputHeight").value
+            ? parseInt(document.getElementById("inputHeight").value) : undefined;
+
+        const opts = { format };
+        if (format === "jpg" || format === "jpeg") opts.quality = quality;
+        if (width) opts.width = width;
+        if (height) opts.height = height;
+        return opts;
+    }
+
+    function getMimeType(format) {
+        return format === "jpg" || format === "jpeg" ? "image/jpeg" : "image/png";
+    }
+
+    function getFileExt(format) {
+        return format === "jpg" || format === "jpeg" ? "jpg" : "png";
+    }
+
+    // ===== 下载截图（5.0 返回 { dataUrl } 对象） =====
+    function downloadScreenshot(screenshot, format) {
+        const ext = getFileExt(format);
+        const dataUrl = screenshot.dataUrl;
+        const link = document.createElement("a");
+        link.href = dataUrl;
+        link.download = `screenshot_${Date.now()}.${ext}`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    function setStatus(msg, duration) {
+        document.getElementById("statusText").textContent = msg;
+        if (duration) setTimeout(() => {
+            document.getElementById("statusText").textContent = "📸 takeScreenshot | 点击按钮截图";
+        }, duration);
+    }
+
+    // ===== 初始化 =====
+    view.when(() => {
+        console.log("场景加载完成");
+        addSceneObjects();
+
+        // 截图
+        document.getElementById("btnScreenshot").addEventListener("click", async () => {
+            setStatus("⏳ 正在截图...");
+            const opts = getScreenshotOptions();
+            lastCanvas = await view.takeScreenshot(opts);
+            const dataUrl = lastCanvas.dataUrl;
+            setStatus(
+                `✅ 截图完成！格式：${opts.format.toUpperCase()}` +
+                `，DataURL 长度：${Math.round(dataUrl.length / 1024)}KB`,
+                5000
+            );
+            console.log("截图完成");
+        });
+
+        // 下载 PNG
+        document.getElementById("btnDownload").addEventListener("click", async () => {
+            setStatus("⏳ 正在生成 PNG 截图...");
+            const shot = await view.takeScreenshot({ format: "png" });
+            lastCanvas = shot;
+            downloadScreenshot(shot, "png");
+            setStatus("✅ PNG 下载已触发！", 3000);
+        });
+
+        // 下载 JPG
+        document.getElementById("btnDownloadJpg").addEventListener("click", async () => {
+            setStatus("⏳ 正在生成 JPG 截图...");
+            const shot = await view.takeScreenshot({
+                format: "jpg",
+                quality: parseFloat(document.getElementById("selQuality").value)
+            });
+            lastCanvas = shot;
+            downloadScreenshot(shot, "jpg");
+            setStatus("✅ JPG 下载已触发！质量：" + document.getElementById("selQuality").value, 3000);
+        });
+
+        // 预览截图
+        document.getElementById("btnPreview").addEventListener("click", async () => {
+            setStatus("⏳ 正在生成预览...");
+            const shot = lastCanvas || await view.takeScreenshot(getScreenshotOptions());
+            lastCanvas = shot;
+            document.getElementById("previewImage").src = shot.dataUrl;
+            document.getElementById("previewModal").classList.add("show");
+            setStatus("🔍 截图预览已打开");
+        });
+
+        // 关闭预览
+        document.getElementById("btnClosePreview").addEventListener("click", () => {
+            document.getElementById("previewModal").classList.remove("show");
+        });
+        document.getElementById("previewModal").addEventListener("click", (e) => {
+            if (e.target === e.currentTarget) {
+                document.getElementById("previewModal").classList.remove("show");
+            }
+        });
+
+        // 预览中的下载按钮
+        document.getElementById("btnModalDownload").addEventListener("click", () => {
+            if (lastCanvas) {
+                const opts = getScreenshotOptions();
+                downloadScreenshot(lastCanvas, opts.format);
+                setStatus("✅ 截图已下载！", 3000);
+            }
+        });
+
+        // 4K 高清截图
+        document.getElementById("btn4K").addEventListener("click", async () => {
+            setStatus("⏳ 正在生成 4K 高清截图...");
+            const shot = await view.takeScreenshot({
+                format: "png",
+                width: 3840,
+                height: 2160
+            });
+            lastCanvas = shot;
+            downloadScreenshot(shot, "png");
+            setStatus("✅ 4K 截图下载已触发！尺寸：3840×2160px", 5000);
+        });
+    });
+</script>
+</body>
+</html>
