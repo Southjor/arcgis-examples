@@ -53,7 +53,7 @@
     </div>
 </div>
 
-<div class="status-text" id="statusText">navigation.enabled = true | 当前：已解锁</div>
+<div class="status-text" id="statusText">actionMap 默认值 | 当前：可自由操作</div>
 <div id="mapContainer"></div>
 
 <script type="module">
@@ -93,25 +93,32 @@
     map.add(gLayer);
 
     let flyInterval = null;
+    let locked = false;
     const btnLock = document.getElementById("btnLock");
     function setStatus(msg) { document.getElementById("statusText").textContent = msg; }
 
-    // 锁定/解锁切换
+    function setNav(disable) {
+        view.navigation.actionMap.dragPrimary   = disable ? "none" : "pan";
+        view.navigation.actionMap.dragSecondary = disable ? "none" : "rotate";
+        view.navigation.actionMap.dragTertiary  = disable ? "none" : "zoom";
+        view.navigation.actionMap.mouseWheel    = disable ? "none" : "zoom";
+    }
+
     document.getElementById("btnLock").addEventListener("click", function () {
-        view.navigation.enabled = !view.navigation.enabled;
-        this.textContent = view.navigation.enabled ? "🔓 已解锁" : "🔒 已锁定";
-        this.className = view.navigation.enabled ? "on" : "locked";
-        setStatus("navigation.enabled = " + view.navigation.enabled + " | " + (view.navigation.enabled ? "可自由操作" : "视角已锁定"));
+        locked = !locked;
+        setNav(locked);
+        this.textContent = locked ? "🔒 已锁定" : "🔓 已解锁";
+        this.className = locked ? "locked" : "on";
+        setStatus(locked ? "交互已锁定 | 拖拽/缩放/旋转均无效" : "已解锁 | 可自由操作");
     });
 
-    // 自动飞行
     document.getElementById("btnAutoFly").addEventListener("click", function () {
         if (flyInterval) {
             clearInterval(flyInterval); flyInterval = null;
             this.textContent = "🚁 自动飞";
             return;
         }
-        view.navigation.enabled = false;
+        if (!locked) { locked = true; setNav(true); }
         btnLock.textContent = "🔒 已锁定"; btnLock.className = "locked";
         setStatus("自动飞行中... | 视角已锁定");
         this.textContent = "⏹ 停止";
