@@ -49,6 +49,9 @@
     </div>
     <div class="btn-row">
         <button id="btnMesh">📦 加立方体</button>
+        <button id="btnCustomMesh">🔺 自定义Mesh</button>
+    </div>
+    <div class="btn-row">
         <button id="btnClear">🗑 清除</button>
     </div>
 </div>
@@ -82,12 +85,13 @@
 
     const view = new SceneView({
         container: "mapContainer", map: map,
-        camera: { position: { longitude: 116.397, latitude: 39.917, z: 3000 }, heading: 30, tilt: 50 }
+        camera: { position: { longitude: 116.397, latitude: 39.917, z: 800 }, heading: 30, tilt: 60 }
     });
     window.view = view;
 
     const gl = new GraphicsLayer({
-        title: "图形层", elevationInfo: { mode: "on-the-ground" },
+        title: "图形层",
+        elevationInfo: { mode: "relative-to-ground" },
         castShadows: true, receiveShadows: true
     });
     map.add(gl);
@@ -98,13 +102,17 @@
     // 添加点
     document.getElementById("btnPoint").onclick = () => {
         gl.add(new Graphic({
-            geometry: new Point({ longitude: c.lng + 0.002 * Math.random(), latitude: c.lat + 0.002 * Math.random() }),
+            geometry: new Point({
+                longitude: c.lng + 0.002 * Math.random(),
+                latitude: c.lat + 0.002 * Math.random(),
+                z: 150
+            }),
             symbol: {
                 type: "point-3d",
                 symbolLayers: [{ type: "icon", resource: { primitive: "circle" }, size: 16, material: { color: [255, 50, 50] } }]
             }
         }));
-        S("已添加红点");
+        S("已添加红点（浮空 150m）");
     };
 
     // 添加线
@@ -139,6 +147,32 @@
             symbol: { type: "mesh-3d", symbolLayers: [{ type: "fill", material: { color: [0, 200, 100, 0.9] } }] }
         }));
         S("已添加绿色立方体");
+    };
+
+    // 添加自定义Mesh（四棱锥：顶点+索引构建）
+    document.getElementById("btnCustomMesh").onclick = () => {
+        const cx = c.lng, cy = c.lat, s = 0.0005; // ~55m
+        const position = new Float64Array([
+            cx,         cy + s * 0.8, 250,  // apex
+            cx - s,     cy - s * 0.5, 100,  // base-left
+            cx + s,     cy - s * 0.5, 100,  // base-right
+            cx,         cy + s,       100   // base-front
+        ]);
+        const faces = new Uint32Array([
+            0, 1, 2,  0, 2, 3,  0, 3, 1,  1, 3, 2
+        ]);
+        gl.add(new Graphic({
+            geometry: new Mesh({
+                vertexAttributes: { position: position },
+                components: [{ faces: faces }],
+                spatialReference: { wkid: 4326 }
+            }),
+            symbol: {
+                type: "mesh-3d",
+                symbolLayers: [{ type: "fill", material: { color: [255, 100, 50, 0.85] } }]
+            }
+        }));
+        S("已添加自定义四棱锥 Mesh（顶点+索引构建）");
     };
 
     // 清除
