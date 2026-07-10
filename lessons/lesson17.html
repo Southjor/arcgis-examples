@@ -101,7 +101,7 @@
 
     // 添加点
     document.getElementById("btnPoint").onclick = () => {
-        gl.add(new Graphic({
+        const g = new Graphic({
             geometry: new Point({
                 longitude: c.lng + 0.002 * Math.random(),
                 latitude: c.lat + 0.002 * Math.random(),
@@ -111,24 +111,28 @@
                 type: "point-3d",
                 symbolLayers: [{ type: "icon", resource: { primitive: "circle" }, size: 16, material: { color: [255, 50, 50] } }]
             }
-        }));
+        });
+        gl.add(g);
+        view.goTo(g.geometry);
         S("已添加红点（浮空 150m）");
     };
 
     // 添加线
     document.getElementById("btnLine").onclick = () => {
-        gl.add(new Graphic({
+        const g = new Graphic({
             geometry: new Polyline({
                 paths: [[[c.lng - 0.003, c.lat - 0.002], [c.lng + 0.001, c.lat + 0.001], [c.lng + 0.003, c.lat - 0.001]]]
             }),
             symbol: { type: "line-3d", symbolLayers: [{ type: "line", size: 4, material: { color: [255, 165, 0] } }] }
-        }));
+        });
+        gl.add(g);
+        view.goTo(g.geometry);
         S("已添加橙色线");
     };
 
     // 添加面
     document.getElementById("btnPolygon").onclick = () => {
-        gl.add(new Graphic({
+        const g = new Graphic({
             geometry: new Polygon({
                 rings: [[[c.lng - 0.002, c.lat - 0.001], [c.lng + 0.002, c.lat - 0.001], [c.lng + 0.001, c.lat + 0.002], [c.lng - 0.002, c.lat + 0.001]]]
             }),
@@ -136,16 +140,20 @@
                 type: "polygon-3d",
                 symbolLayers: [{ type: "fill", material: { color: [0, 120, 255, 0.3] }, outline: { color: [0, 120, 255, 0.8] } }]
             }
-        }));
+        });
+        gl.add(g);
+        view.goTo(g.geometry);
         S("已添加蓝色面");
     };
 
     // 添加3D立方体
     document.getElementById("btnMesh").onclick = () => {
-        gl.add(new Graphic({
+        const g = new Graphic({
             geometry: Mesh.createBox(new Point({ longitude: c.lng + 0.001, latitude: c.lat + 0.002, z: 0 }), { size: { width: 100, height: 150, depth: 100 } }),
             symbol: { type: "mesh-3d", symbolLayers: [{ type: "fill", material: { color: [0, 200, 100, 0.9] } }] }
-        }));
+        });
+        gl.add(g);
+        view.goTo(g.geometry);
         S("已添加绿色立方体");
     };
 
@@ -161,7 +169,7 @@
         const faces = new Uint32Array([
             0, 1, 2,  0, 2, 3,  0, 3, 1,  1, 3, 2
         ]);
-        gl.add(new Graphic({
+        const g = new Graphic({
             geometry: new Mesh({
                 vertexAttributes: { position: position },
                 components: [{ faces: faces }],
@@ -171,7 +179,9 @@
                 type: "mesh-3d",
                 symbolLayers: [{ type: "fill", material: { color: [255, 100, 50, 0.85] } }]
             }
-        }));
+        });
+        gl.add(g);
+        view.goTo(g.geometry);
         S("已添加自定义四棱锥 Mesh（顶点+索引构建）");
     };
 
