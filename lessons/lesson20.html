@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>第20课：IntegratedMeshLayer 实景网格</title>
+    <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css">
+    <script type="module" src="https://js.arcgis.com/5.0/"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: "Microsoft YaHei", sans-serif; }
+        #mapContainer { width: 100vw; height: 100vh; }
+        .page-title {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(255,255,255,0.95); padding: 10px 24px; border-radius: 6px;
+            font-size: 18px; font-weight: bold; z-index: 100;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .status {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.7); color: white; padding: 8px 20px;
+            border-radius: 20px; font-size: 13px; z-index: 100; pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+<h1 class="page-title">第20课：IntegratedMeshLayer 实景网格</h1>
+<div class="status" id="st">IntegratedMesh | 加载中...</div>
+<div id="mapContainer"></div>
+
+<script type="module">
+    const Map = await $arcgis.import("@arcgis/core/Map.js");
+    const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
+    const IntegratedMeshLayer = await $arcgis.import("@arcgis/core/layers/IntegratedMeshLayer.js");
+    const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
+
+    const tl = getTianditu.default({ type: "vec_w" });
+    const map = new Map({ basemap: { baseLayers: [tl.base, tl.anno] } });
+    const view = new SceneView({ container: "mapContainer", map, zoom: 8, center: [114.17, 22.30] });
+    window.view = view;
+
+    // GeoScene IntegratedMesh - 香港实景网格
+    const mesh = new IntegratedMeshLayer({
+        url: "https://3dws.geoscene.cn/server/rest/services/Hosted/Hongkong_IntegratedMesh_2/SceneServer"
+    });
+    map.add(mesh);
+
+    view.whenLayerView(mesh).then(() => {
+        view.goTo(mesh.fullExtent, { duration: 2000, easing: "cubic-out" });
+        document.getElementById("st").textContent = "IntegratedMesh | 已加载香港实景网格";
+    }).catch(() => {
+        document.getElementById("st").textContent = "IntegratedMesh | 加载中（网络较慢请等待）";
+    });
+</script>
+</body>
+</html>
