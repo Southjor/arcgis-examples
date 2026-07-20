@@ -31,26 +31,39 @@
 <script type="module">
     const Map = await $arcgis.import("@arcgis/core/Map.js");
     const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
-    const OGCBuildingSceneLayer = await $arcgis.import("@arcgis/core/layers/OGCBuildingSceneLayer.js");
+    // 关键：ArcGIS JS 原生支持 Cesium 3D Tiles（自 4.29 起），url 直接指向 tileset.json
+    const IntegratedMesh3DTilesLayer = await $arcgis.import("@arcgis/core/layers/IntegratedMesh3DTilesLayer.js");
     const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
 
     const tl = getTianditu.default({ type: "vec_w" });
     const map = new Map({ basemap: { baseLayers: [tl.base, tl.anno] } });
-    const view = new SceneView({ container: "mapContainer", map, zoom: 8, center: [-122.42, 37.78] });
+
+    const view = new SceneView({
+        container: "mapContainer",
+        map,
+        // 初始视角给一个香港附近的大致位置，加载完成后会 goTo 到图层真实范围
+        center: [114.17, 22.30],
+        zoom: 11
+    });
     window.view = view;
 
-    // 3D Tiles (OGC标准) - San Francisco buildings
-    const tiles = new OGCBuildingSceneLayer({
-        url: "https://tiles.arcgis.com/tiles/z2tnIkrLQ2BRzr6P/arcgis/rest/services/SanFrancisco_Bldgs/SceneServer/layers/0"
+    // 3D Tiles (Cesium 3D Tiles 1.1, 香港集成网格) —— 直接指向 tileset.json
+    const tiles = new IntegratedMesh3DTilesLayer({
+        url: "http://openlayers.vip/cesium/3dtile/xianggang_1.1/tileset.json",
+        title: "香港 3D Tiles 集成网格"
     });
     map.add(tiles);
 
-    view.whenLayerView(tiles).then(() => {
+    await view.when();
+    // 等待图层资源加载完成，fullExtent 才会是图层的真实范围
+    await tiles.load();
+    try {
         view.goTo(tiles.fullExtent, { duration: 2000, easing: "cubic-out" });
-        document.getElementById("st").textContent = "3D Tiles | 已加载";
-    }).catch(() => {
-        document.getElementById("st").textContent = "3D Tiles | 加载失败，请检查URL";
-    });
+        document.getElementById("st").textContent = "3D Tiles | 已加载：" + tiles.title;
+    } catch (e) {
+        document.getElementById("st").textContent = "3D Tiles | 加载失败：" + (e && e.message ? e.message : e);
+        console.error(e);
+    }
 </script>
 </body>
 </html>
