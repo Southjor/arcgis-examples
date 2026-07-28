@@ -36,12 +36,12 @@
 
     const tl = getTianditu.default({ type: "vec_w" });
     const map = new Map({ basemap: { baseLayers: [tl.base, tl.anno] } });
-    const view = new SceneView({ container: "mapContainer", map, zoom: 8, center: [-122.42, 37.78] });
+    const view = new SceneView({ container: "mapContainer", map, zoom: 14, center: [-83.0472, 39.9982] });
     window.view = view;
 
     // BIM BuildingSceneLayer
     const bsl = new BuildingSceneLayer({
-        url: "https://tiles.arcgis.com/tiles/V6ZHFr3bISPEp4Tn/arcgis/rest/services/Building/SceneServer"
+        url: "https://gs3d.geosceneonline.cn/server/rest/services/Hosted/adminBldgBim/SceneServer/"
     });
     map.add(bsl);
 
