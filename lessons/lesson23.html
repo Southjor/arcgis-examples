@@ -36,22 +36,25 @@
 
     const tl = getTianditu.default({ type: "vec_w" });
     const map = new Map({ basemap: { baseLayers: [tl.base, tl.anno] } });
-    const view = new SceneView({ container: "mapContainer", map, zoom: 14, center: [-122.42, 37.78] });
+    const view = new SceneView({ container: "mapContainer", map, zoom: 15, center: [108.8, 15.2] });
     window.view = view;
 
-    // GaussianSplatLayer — 5.0 新特性，加载 .splat 格式文件
+    // GaussianSplatLayer — 5.0 新特性，通过 URL 加载 Cesium ion 高斯泼溅（Boathouse_Hines）
     const gs = new GaussianSplatLayer({
-        url: "https://static.arcgis.com/attachments/splats/3617c7c08f684d8483e3f2d78a5c2f02.splat",
-        elevationInfo: { mode: "relative-to-ground", offset: 5 }
+        url: "https://tiles.arcgis.com/tiles/V6ZHFr6zdgNZuVG0/arcgis/rest/services/Portcoast_industrial/3DTilesServer/tileset.json",
+        elevationInfo: { mode: "absolute-height", offset: 10 }
     });
     map.add(gs);
 
-    view.whenLayerView(gs).then(() => {
+    await view.when();
+    await gs.load();
+    try {
         view.goTo(gs.fullExtent, { duration: 2000, easing: "cubic-out" });
         document.getElementById("st").textContent = "GaussianSplat | 5.0新特性已加载";
-    }).catch(() => {
-        document.getElementById("st").textContent = "GaussianSplat | 加载失败";
-    });
+    } catch (e) {
+        document.getElementById("st").textContent = "GaussianSplat | 加载失败：" + (e && e.message ? e.message : e);
+        console.error(e);
+    }
 </script>
 </body>
 </html>
