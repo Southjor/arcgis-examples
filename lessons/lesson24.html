@@ -96,16 +96,53 @@
     });
     map.add(vtl);
 
-    let originalStyle = null;
+    let originalStyleUrl = null;   // 原始样式 URL（与瓦片同源，sprite/glyphs 配套）
+    let originalStyle = null;      // 原始样式对象（用于派生暗色样式）
+    let darkStyle = null;          // 缓存的暗色样式对象，避免重复构建
+
     view.when(() => {
         vtl.when(() => {
-            originalStyle = vtl.currentStyleInfo && vtl.currentStyleInfo.styleUrl;
+            const info = vtl.currentStyleInfo;
+            originalStyleUrl = info && info.styleUrl;
+            // 优先使用已解析的样式对象；否则按 URL 拉取与瓦片同源的样式 JSON。
+            // 暗色样式必须基于「同源样式」派生，才能保留配套的 sprite/glyphs，
+            // 否则加载外部不兼容样式会导致 3D 图标层 sprite 缺失，_drawIcons 读 size 崩溃。
+            if (info && info.style) {
+                originalStyle = info.style;
+            } else if (originalStyleUrl) {
+                fetch(originalStyleUrl)
+                    .then(r => r.json())
+                    .then(s => { originalStyle = s; })
+                    .catch(err => console.warn("样式 JSON 拉取失败:", err.message));
+            }
             document.getElementById("layerStatus").textContent = "已加载";
         }).catch(err => {
             document.getElementById("layerStatus").textContent = "加载失败";
             console.error(err);
         });
     });
+
+    // 由同源样式派生暗色样式：仅改写 paint / 背景颜色，原样保留 sources、sprite、glyphs 引用，
+    // 确保 3D 图标渲染仍能定位图集（不崩溃）。
+    function buildDarkStyle(base) {
+        const style = JSON.parse(JSON.stringify(base));
+        if (style.background) style.background = "#1a1f29";
+        (style.layers || []).forEach(layer => {
+            const paint = layer.paint || (layer.paint = {});
+            if (layer.type === "background") {
+                paint["background-color"] = "#1a1f29";
+            } else if (layer.type === "fill") {
+                if (paint["fill-color"] !== undefined) paint["fill-color"] = "#232b36";
+                if (paint["fill-outline-color"] !== undefined) paint["fill-outline-color"] = "#10151c";
+            } else if (layer.type === "line") {
+                if (paint["line-color"] !== undefined) paint["line-color"] = "#3a4756";
+            } else if (layer.type === "symbol") {
+                if (paint["text-color"] !== undefined) paint["text-color"] = "#d6dee8";
+                if (paint["text-halo-color"] !== undefined) paint["text-halo-color"] = "#05080c";
+            }
+        });
+        return style;
+    }
 
     function setStatus(msg) { document.getElementById("statusText").textContent = msg; }
 
@@ -122,20 +159,21 @@
         setStatus("透明度：" + vtl.opacity);
     });
 
-    // 切换暗色样式（整体替换 style JSON）
+    // 切换暗色样式（基于当前同源样式派生，sprite/glyphs 与瓦片一致，不再崩溃）
     document.getElementById("btnStyleA").addEventListener("click", () => {
-        vtl.loadStyle("https://www.arcgis.com/sharing/rest/content/items/effe3475f05a4d608e66fd6eeb2113c0/resources/styles/root.json")
-            .then(() => setStatus("已切换为暗色样式"))
+        if (!originalStyle) { setStatus("样式尚未就绪，请稍候再切换"); return; }
+        if (!darkStyle) darkStyle = buildDarkStyle(originalStyle);
+        vtl.loadStyle(darkStyle)
+            .then(() => setStatus("已切换为：暗色样式"))
             .catch(err => setStatus("样式切换失败：" + err.message));
     });
 
-    // 还原初始样式
+    // 还原初始样式（直接恢复原始样式 URL，等价于最初加载的同源样式）
     document.getElementById("btnStyleReset").addEventListener("click", () => {
-        if (originalStyle) {
-            vtl.loadStyle(originalStyle)
-                .then(() => setStatus("已还原初始样式"))
-                .catch(err => setStatus("样式还原失败：" + err.message));
-        }
+        if (!originalStyleUrl) { setStatus("样式尚未就绪，请稍候再还原"); return; }
+        vtl.loadStyle(originalStyleUrl)
+            .then(() => { darkStyle = null; setStatus("已还原初始样式"); })
+            .catch(err => setStatus("样式还原失败：" + err.message));
     });
 </script>
 </body>
