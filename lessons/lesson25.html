@@ -124,16 +124,6 @@
     });
     map.add(geojsonLayer);
 
-    view.when(() => {
-        geojsonLayer.when(() => {
-            document.getElementById("layerStatus").textContent = "已加载";
-            view.goTo(geojsonLayer.fullExtent);
-        }).catch(err => {
-            document.getElementById("layerStatus").textContent = "加载失败";
-            console.error(err);
-        });
-    });
-
     function setStatus(msg) { document.getElementById("statusText").textContent = msg; }
 
     document.getElementById("btnVisible").addEventListener("click", function () {
@@ -143,8 +133,23 @@
     });
 
     document.getElementById("btnFlyTo").addEventListener("click", () => {
-        view.goTo({ position: { longitude: 120, latitude: 30, z: 12000000 }, tilt: 0 });
+        // 取消正在进行的飞行（如 fullExtent 自动飞行），避免被打断导致无效
+        view.goTo({
+            position: { longitude: 120, latitude: 30, z: 12000000 },
+            heading: 0,
+            tilt: 0
+        }, { animate: true }).catch(() => {});
         setStatus("已回到全球视角");
+    });
+
+    view.when(() => {
+        geojsonLayer.when(() => {
+            document.getElementById("layerStatus").textContent = "已加载";
+            view.goTo(geojsonLayer.fullExtent);
+        }).catch(err => {
+            document.getElementById("layerStatus").textContent = "加载失败";
+            console.error(err);
+        });
     });
 </script>
 </body>
