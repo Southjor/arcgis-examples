@@ -79,6 +79,7 @@
     const Map = await $arcgis.import("@arcgis/core/Map.js");
     const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
     const GeoJSONLayer = await $arcgis.import("@arcgis/core/layers/GeoJSONLayer.js");
+    const Camera = await $arcgis.import("@arcgis/core/Camera.js");
     const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
 
     const vecLayers = getTianditu.default({ type: "vec_w" });
@@ -133,12 +134,12 @@
     });
 
     document.getElementById("btnFlyTo").addEventListener("click", () => {
-        // 取消正在进行的飞行（如 fullExtent 自动飞行），避免被打断导致无效
-        view.goTo({
+        // 直接给 view.camera 赋值，绕过 goTo 在 view.updating 期间的更新锁，确保必定定位到全球视角
+        view.camera = new Camera({
             position: { longitude: 120, latitude: 30, z: 12000000 },
             heading: 0,
             tilt: 0
-        }, { animate: true }).catch(() => {});
+        });
         setStatus("已回到全球视角");
     });
 
