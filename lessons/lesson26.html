@@ -68,6 +68,13 @@
             <button id="btnCsvOpacity">🌗 地震透明度</button>
         </div>
     </div>
+    <div class="section">
+        <h3>🎯 视角切换</h3>
+        <div class="btn-row">
+            <button id="btnViewBld">🏢 建筑视角</button>
+            <button id="btnViewCsv">🌐 地震视角</button>
+        </div>
+    </div>
     <div class="info-card">
         <div>建筑状态：<span class="val" id="bldStatus">加载中...</span></div>
         <div>地震状态：<span class="val" id="csvStatus">加载中...</span></div>
@@ -167,10 +174,12 @@
     });
 
     // 建筑仅近景显示（比例尺范围）
+    // 注意：用 minScale（缩小极限）——当地图拉远到 scale 超过 minScale 时隐藏；
+    // maxScale 是放大极限（更近时隐藏），用错会导致初始拉远视角直接消失。
     let scaleOn = false;
     document.getElementById("btnBldScale").addEventListener("click", function () {
         scaleOn = !scaleOn;
-        buildingsLayer.maxScale = scaleOn ? 100000 : 0;
+        buildingsLayer.minScale = scaleOn ? 500000 : 0;
         this.classList.toggle("on", scaleOn);
         setStatus(scaleOn ? "建筑：仅近景显示（拉远自动隐藏）" : "建筑：比例尺限制已清除");
     });
@@ -186,6 +195,18 @@
     document.getElementById("btnCsvOpacity").addEventListener("click", () => {
         csvLayer.opacity = csvLayer.opacity === 1 ? 0.4 : 1;
         setStatus("地震透明度：" + csvLayer.opacity);
+    });
+
+    // 视角切换：飞到建筑图层范围（上海局部）
+    document.getElementById("btnViewBld").addEventListener("click", () => {
+        view.goTo(buildingsLayer.fullExtent, { duration: 1500 }).catch(() => {});
+        setStatus("视角：建筑图层（上海局部）");
+    });
+
+    // 视角切换：飞到地震图层范围（全球）
+    document.getElementById("btnViewCsv").addEventListener("click", () => {
+        view.goTo(csvLayer.fullExtent, { duration: 1500 }).catch(() => {});
+        setStatus("视角：地震图层（全球）");
     });
 </script>
 </body>
