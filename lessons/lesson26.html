@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>第26课：图层可见性与透明度控制</title>
+    <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css">
+    <script type="module" src="https://js.arcgis.com/5.0/"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: "Microsoft YaHei", sans-serif; }
+        #mapContainer { width: 100vw; height: 100vh; }
+        .page-title {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(255,255,255,0.95); padding: 10px 24px; border-radius: 6px;
+            font-size: 18px; font-weight: bold; z-index: 100;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .control-panel {
+            position: absolute; top: 80px; right: 20px;
+            background: rgba(255,255,255,0.95); padding: 16px; border-radius: 8px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+            z-index: 100; min-width: 300px;
+        }
+        .control-panel h3 { margin: 0 0 8px 0; font-size: 14px; color: #333; }
+        .section { margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+        .section:last-child { border-bottom: none; margin-bottom: 0; }
+        .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+        .btn-row button {
+            flex: 1; min-width: 60px; padding: 6px 0;
+            border: 1px solid #d9d9d9; border-radius: 4px;
+            background: white; cursor: pointer; font-size: 12px;
+        }
+        .btn-row button:hover { border-color: #1890ff; color: #1890ff; }
+        .btn-row button.on { background: #1890ff; color: white; border-color: #1890ff; }
+        .info-card {
+            margin-top: 10px; padding: 10px 12px;
+            background: #f0f5ff; border-radius: 6px;
+            border-left: 3px solid #1890ff; font-size: 12px; line-height: 1.6;
+        }
+        .info-card .val { font-weight: bold; color: #1890ff; }
+        .status-text {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.7); color: white; padding: 8px 20px;
+            border-radius: 20px; font-size: 13px; z-index: 100; pointer-events: none;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+<h1 class="page-title">第26课：图层可见性与透明度控制</h1>
+
+<div class="control-panel">
+    <div class="section">
+        <h3>🏢 建筑图层（FeatureLayer）</h3>
+        <div class="btn-row">
+            <button id="btnBldVisible" class="on">👁️ 建筑显隐</button>
+            <button id="btnBldOpacity">🌗 建筑透明度</button>
+        </div>
+        <div class="btn-row">
+            <button id="btnBldScale">🔍 仅近景显示</button>
+        </div>
+    </div>
+    <div class="section">
+        <h3>🌐 地震图层（CSVLayer）</h3>
+        <div class="btn-row">
+            <button id="btnCsvVisible" class="on">👁️ 地震显隐</button>
+            <button id="btnCsvOpacity">🌗 地震透明度</button>
+        </div>
+    </div>
+    <div class="info-card">
+        <div>建筑状态：<span class="val" id="bldStatus">加载中...</span></div>
+        <div>地震状态：<span class="val" id="csvStatus">加载中...</span></div>
+    </div>
+</div>
+
+<div class="status-text" id="statusText">图层可见性与透明度 | 显隐 / 透明度 / 比例尺范围</div>
+
+<div id="mapContainer"></div>
+
+<script type="module">
+    const Map = await $arcgis.import("@arcgis/core/Map.js");
+    const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
+    const FeatureLayer = await $arcgis.import("@arcgis/core/layers/FeatureLayer.js");
+    const CSVLayer = await $arcgis.import("@arcgis/core/layers/CSVLayer.js");
+    const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
+
+    const vecLayers = getTianditu.default({ type: "vec_w" });
+    const map = new Map({ basemap: { baseLayers: [vecLayers.base, vecLayers.anno] } });
+
+    const view = new SceneView({
+        container: "mapContainer", map: map,
+        camera: {
+            position: { longitude: 121.435, latitude: 31.245, z: 4000 },
+            heading: 30, tilt: 60
+        }
+    });
+    window.view = view;
+
+    // ===== 建筑图层（面 + 拉伸） =====
+    const buildingsLayer = new FeatureLayer({
+        url: "https://gs3d.geosceneonline.cn/server/rest/services/Hosted/ShangHaiBuilding/FeatureServer/0",
+        elevationInfo: { mode: "on-the-ground" },
+        outFields: ["id", "floor", "year"],
+        renderer: {
+            type: "simple",
+            symbol: {
+                type: "polygon-3d",
+                symbolLayers: [{
+                    type: "extrude",
+                    material: { color: "#D4B87C" },
+                    edges: { type: "solid", color: "#999999", size: 0.5 }
+                }]
+            },
+            visualVariables: [{ type: "size", field: "floor", axis: "height", valueUnit: "unknown" }]
+        }
+    });
+    map.add(buildingsLayer);
+
+    // ===== 地震图层（CSV 点） =====
+    const csvLayer = new CSVLayer({
+        url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_week.csv",
+        copyright: "USGS Earthquakes",
+        latitudeField: "latitude",
+        longitudeField: "longitude",
+        elevationInfo: { mode: "on-the-ground" },
+        renderer: {
+            type: "simple",
+            symbol: {
+                type: "point-3d",
+                symbolLayers: [{
+                    type: "object",
+                    resource: { primitive: "sphere" },
+                    anchor: "bottom",
+                    material: { color: [255, 80, 0, 0.85] }
+                }]
+            },
+            visualVariables: [{
+                type: "size", field: "mag", axis: "all",
+                stops: [{ value: 2.5, size: 8000 }, { value: 6, size: 40000 }]
+            }]
+        }
+    });
+    map.add(csvLayer);
+
+    view.when(() => {
+        buildingsLayer.when(() => {
+            document.getElementById("bldStatus").textContent = "已加载";
+            view.goTo(buildingsLayer.fullExtent, { duration: 2000, easing: "cubic-out" });
+        });
+        csvLayer.when(() => { document.getElementById("csvStatus").textContent = "已加载"; });
+    });
+
+    function setStatus(msg) { document.getElementById("statusText").textContent = msg; }
+
+    // 建筑显隐
+    document.getElementById("btnBldVisible").addEventListener("click", function () {
+        buildingsLayer.visible = !buildingsLayer.visible;
+        this.classList.toggle("on", buildingsLayer.visible);
+        setStatus("建筑图层：" + (buildingsLayer.visible ? "显示" : "隐藏"));
+    });
+
+    // 建筑透明度
+    document.getElementById("btnBldOpacity").addEventListener("click", () => {
+        buildingsLayer.opacity = buildingsLayer.opacity === 1 ? 0.4 : 1;
+        setStatus("建筑透明度：" + buildingsLayer.opacity);
+    });
+
+    // 建筑仅近景显示（比例尺范围）
+    let scaleOn = false;
+    document.getElementById("btnBldScale").addEventListener("click", function () {
+        scaleOn = !scaleOn;
+        buildingsLayer.maxScale = scaleOn ? 100000 : 0;
+        this.classList.toggle("on", scaleOn);
+        setStatus(scaleOn ? "建筑：仅近景显示（拉远自动隐藏）" : "建筑：比例尺限制已清除");
+    });
+
+    // 地震显隐
+    document.getElementById("btnCsvVisible").addEventListener("click", function () {
+        csvLayer.visible = !csvLayer.visible;
+        this.classList.toggle("on", csvLayer.visible);
+        setStatus("地震图层：" + (csvLayer.visible ? "显示" : "隐藏"));
+    });
+
+    // 地震透明度
+    document.getElementById("btnCsvOpacity").addEventListener("click", () => {
+        csvLayer.opacity = csvLayer.opacity === 1 ? 0.4 : 1;
+        setStatus("地震透明度：" + csvLayer.opacity);
+    });
+</script>
+</body>
+</html>
