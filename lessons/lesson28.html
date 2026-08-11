@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>第28课：图层渲染顺序管理</title>
+    <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css">
+    <script type="module" src="https://js.arcgis.com/5.0/"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: "Microsoft YaHei", sans-serif; }
+        #mapContainer { width: 100vw; height: 100vh; }
+        .page-title {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(255,255,255,0.95); padding: 10px 24px; border-radius: 6px;
+            font-size: 18px; font-weight: bold; z-index: 100;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .control-panel {
+            position: absolute; top: 80px; right: 20px;
+            background: rgba(255,255,255,0.95); padding: 16px; border-radius: 8px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+            z-index: 100; min-width: 320px;
+        }
+        .control-panel h3 { margin: 0 0 8px 0; font-size: 14px; color: #333; }
+        .section { margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+        .section:last-child { border-bottom: none; margin-bottom: 0; }
+        .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+        .btn-row button {
+            flex: 1; min-width: 70px; padding: 6px 0;
+            border: 1px solid #d9d9d9; border-radius: 4px;
+            background: white; cursor: pointer; font-size: 12px;
+        }
+        .btn-row button:hover { border-color: #1890ff; color: #1890ff; }
+        .btn-row button.on { background: #1890ff; color: white; border-color: #1890ff; }
+        .info-card {
+            margin-top: 10px; padding: 10px 12px;
+            background: #f0f5ff; border-radius: 6px;
+            border-left: 3px solid #1890ff; font-size: 12px; line-height: 1.6;
+        }
+        .info-card .val { font-weight: bold; color: #1890ff; }
+        .status-text {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.7); color: white; padding: 8px 20px;
+            border-radius: 20px; font-size: 13px; z-index: 100; pointer-events: none;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+<h1 class="page-title">第28课：图层渲染顺序管理</h1>
+
+<div class="control-panel">
+    <div class="section">
+        <h3>🔼 图层顺序（底部 → 顶部）</h3>
+        <div class="btn-row">
+            <button id="btnBldUp">🏢 建筑上移</button>
+            <button id="btnBldDown">🏢 建筑下移</button>
+        </div>
+        <div class="btn-row">
+            <button id="btnCsvUp">🌐 地震上移</button>
+            <button id="btnCsvDown">🌐 地震下移</button>
+        </div>
+    </div>
+    <div class="section">
+        <h3>👁️ 列表显隐（listMode）</h3>
+        <div class="btn-row">
+            <button id="btnListMode" class="on">标注层显示在列表</button>
+        </div>
+    </div>
+    <div class="info-card">
+        <div>当前顺序（上→下）：</div>
+        <div class="val" id="orderInfo">加载中...</div>
+    </div>
+</div>
+
+<div class="status-text" id="statusText">图层渲染顺序管理 | map.reorder / listMode</div>
+
+<div id="mapContainer"></div>
+
+<script type="module">
+    const Map = await $arcgis.import("@arcgis/core/Map.js");
+    const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
+    const FeatureLayer = await $arcgis.import("@arcgis/core/layers/FeatureLayer.js");
+    const CSVLayer = await $arcgis.import("@arcgis/core/layers/CSVLayer.js");
+    const GraphicsLayer = await $arcgis.import("@arcgis/core/layers/GraphicsLayer.js");
+    const Polygon = await $arcgis.import("@arcgis/core/geometry/Polygon.js");
+    const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
+
+    const vecLayers = getTianditu.default({ type: "vec_w" });
+    const map = new Map({ basemap: { baseLayers: [vecLayers.base, vecLayers.anno] } });
+
+    const view = new SceneView({
+        container: "mapContainer", map: map,
+        camera: {
+            position: { longitude: 121.435, latitude: 31.245, z: 4000 },
+            heading: 30, tilt: 60
+        }
+    });
+    window.view = view;
+
+    // 建筑图层
+    const buildingsLayer = new FeatureLayer({
+        url: "https://gs3d.geosceneonline.cn/server/rest/services/Hosted/ShangHaiBuilding/FeatureServer/0",
+        title: "上海建筑",
+        elevationInfo: { mode: "on-the-ground" },
+        outFields: ["id", "floor"],
+        renderer: {
+            type: "simple",
+            symbol: {
+                type: "polygon-3d",
+                symbolLayers: [{ type: "extrude", material: { color: "#D4B87C" },
+                    edges: { type: "solid", color: "#999999", size: 0.5 } }]
+            },
+            visualVariables: [{ type: "size", field: "floor", axis: "height", valueUnit: "unknown" }]
+        }
+    });
+
+    // 地震图层（点）
+    const csvLayer = new CSVLayer({
+        url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_week.csv",
+        title: "地震点位",
+        copyright: "USGS Earthquakes",
+        latitudeField: "latitude", longitudeField: "longitude",
+        elevationInfo: { mode: "on-the-ground" },
+        renderer: {
+            type: "simple",
+            symbol: {
+                type: "point-3d",
+                symbolLayers: [{ type: "object", resource: { primitive: "sphere" },
+                    anchor: "bottom", material: { color: [255, 80, 0, 0.85] } }]
+            },
+            visualVariables: [{ type: "size", field: "mag", axis: "all",
+                stops: [{ value: 2.5, size: 8000 }, { value: 6, size: 40000 }] }]
+        }
+    });
+
+    // 高亮标注图层（半透明多边形）
+    const highlightLayer = new GraphicsLayer({ title: "重点区域标注" });
+    const polygon = new Polygon({
+        rings: [[
+            [121.40, 31.22], [121.47, 31.22], [121.47, 31.28], [121.40, 31.28], [121.40, 31.22]
+        ]],
+        spatialReference: { wkid: 4326 }
+    });
+    highlightLayer.add({
+        geometry: polygon,
+        symbol: {
+            type: "polygon-3d",
+            symbolLayers: [{ type: "fill", material: { color: [24, 144, 255, 0.35] },
+                outline: { color: [24, 144, 255, 1], size: 2 } }]
+        }
+    });
+
+    // 初始顺序：建筑(底) → 地震 → 标注(顶)
+    map.addMany([buildingsLayer, csvLayer, highlightLayer]);
+
+    function refreshOrder() {
+        const topToBottom = map.layers.toArray().reverse();
+        document.getElementById("orderInfo").textContent = topToBottom.map(l => l.title).join("  →  ");
+    }
+    function setStatus(msg) { document.getElementById("statusText").textContent = msg; }
+
+    view.when(() => {
+        view.goTo(buildingsLayer.fullExtent, { duration: 2000, easing: "cubic-out" });
+        refreshOrder();
+    });
+
+    function moveUp(layer, name) {
+        const idx = map.layers.indexOf(layer);
+        if (idx < map.layers.length - 1) {
+            map.reorder(layer, idx + 1);
+            refreshOrder();
+            setStatus(name + " 上移一层");
+        }
+    }
+    function moveDown(layer, name) {
+        const idx = map.layers.indexOf(layer);
+        if (idx > 0) {
+            map.reorder(layer, idx - 1);
+            refreshOrder();
+            setStatus(name + " 下移一层");
+        }
+    }
+
+    document.getElementById("btnBldUp").addEventListener("click", () => moveUp(buildingsLayer, "建筑"));
+    document.getElementById("btnBldDown").addEventListener("click", () => moveDown(buildingsLayer, "建筑"));
+    document.getElementById("btnCsvUp").addEventListener("click", () => moveUp(csvLayer, "地震"));
+    document.getElementById("btnCsvDown").addEventListener("click", () => moveDown(csvLayer, "地震"));
+
+    let listShown = true;
+    document.getElementById("btnListMode").addEventListener("click", function () {
+        listShown = !listShown;
+        highlightLayer.listMode = listShown ? "show" : "hide";
+        this.classList.toggle("on", listShown);
+        this.textContent = listShown ? "标注层显示在列表" : "标注层隐藏于列表";
+        setStatus("标注层 listMode = " + highlightLayer.listMode);
+    });
+</script>
+</body>
+</html>
