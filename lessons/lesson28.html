@@ -58,8 +58,12 @@
             <button id="btnBldDown">🏢 建筑下移</button>
         </div>
         <div class="btn-row">
-            <button id="btnCsvUp">🌐 地震上移</button>
-            <button id="btnCsvDown">🌐 地震下移</button>
+            <button id="btnMkUp">🔵 标注上移</button>
+            <button id="btnMkDown">🔵 标注下移</button>
+        </div>
+        <div class="btn-row">
+            <button id="btnCtrUp">🟢 对照上移</button>
+            <button id="btnCtrDown">🟢 对照下移</button>
         </div>
     </div>
     <div class="section">
@@ -82,9 +86,10 @@
     const Map = await $arcgis.import("@arcgis/core/Map.js");
     const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
     const FeatureLayer = await $arcgis.import("@arcgis/core/layers/FeatureLayer.js");
-    const CSVLayer = await $arcgis.import("@arcgis/core/layers/CSVLayer.js");
     const GraphicsLayer = await $arcgis.import("@arcgis/core/layers/GraphicsLayer.js");
     const Polygon = await $arcgis.import("@arcgis/core/geometry/Polygon.js");
+    const SpatialReference = await $arcgis.import("@arcgis/core/geometry/SpatialReference.js");
+    const projectOperator = await $arcgis.import("@arcgis/core/geometry/operators/projectOperator.js");
     const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
 
     const vecLayers = getTianditu.default({ type: "vec_w" });
@@ -109,51 +114,48 @@
             type: "simple",
             symbol: {
                 type: "polygon-3d",
-                symbolLayers: [{ type: "extrude", material: { color: "#D4B87C" },
-                    edges: { type: "solid", color: "#999999", size: 0.5 } }]
-            },
-            visualVariables: [{ type: "size", field: "floor", axis: "height", valueUnit: "unknown" }]
+                symbolLayers: [{ type: "fill", material: { color: [212, 184, 124, 0.7] },
+                    outline: { color: "#999999", size: 1 } }]
+            }
         }
     });
 
-    // 地震图层（点）
-    const csvLayer = new CSVLayer({
-        url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_week.csv",
-        title: "地震点位",
-        copyright: "USGS Earthquakes",
-        latitudeField: "latitude", longitudeField: "longitude",
-        elevationInfo: { mode: "on-the-ground" },
-        renderer: {
-            type: "simple",
-            symbol: {
-                type: "point-3d",
-                symbolLayers: [{ type: "object", resource: { primitive: "sphere" },
-                    anchor: "bottom", material: { color: [255, 80, 0, 0.85] } }]
-            },
-            visualVariables: [{ type: "size", field: "mag", axis: "all",
-                stops: [{ value: 2.5, size: 8000 }, { value: 6, size: 40000 }] }]
-        }
-    });
+    // 高亮标注图层（半透明多边形，贴地，覆盖建筑区域）
+    const highlightLayer = new GraphicsLayer({ title: "标注层" });
+    // 对照覆盖层（半透明绿色，与标注层完全重叠，用于直观演示 reorder 顺序）
+    const contrastLayer = new GraphicsLayer({ title: "对照层" });
 
-    // 高亮标注图层（半透明多边形）
-    const highlightLayer = new GraphicsLayer({ title: "重点区域标注" });
-    const polygon = new Polygon({
-        rings: [[
-            [121.40, 31.22], [121.47, 31.22], [121.47, 31.28], [121.40, 31.28], [121.40, 31.22]
-        ]],
-        spatialReference: { wkid: 4326 }
-    });
-    highlightLayer.add({
-        geometry: polygon,
-        symbol: {
-            type: "polygon-3d",
-            symbolLayers: [{ type: "fill", material: { color: [24, 144, 255, 0.35] },
-                outline: { color: [24, 144, 255, 1], size: 2 } }]
-        }
-    });
+    // 三个平面层：建筑(底) → 标注(中) → 对照(顶)，绿色盖蓝色
+    map.addMany([buildingsLayer, highlightLayer, contrastLayer]);
 
-    // 初始顺序：建筑(底) → 地震 → 标注(顶)
-    map.addMany([buildingsLayer, csvLayer, highlightLayer]);
+    // 按建筑范围动态生成标注/对照矩形，确保与建筑精确重叠
+    async function addOverlayRects() {
+        await projectOperator.load();
+        const fe = buildingsLayer.fullExtent;                       // Web Mercator (102100)
+        const polyMerc = new Polygon({
+            rings: [[
+                [fe.xmin, fe.ymin], [fe.xmax, fe.ymin], [fe.xmax, fe.ymax],
+                [fe.xmin, fe.ymax], [fe.xmin, fe.ymin]
+            ]],
+            spatialReference: SpatialReference.WebMercator
+        });
+        const polyWgs = projectOperator.execute(polyMerc, SpatialReference.WGS84); // 转成经纬度
+
+        const marker = {
+            geometry: polyWgs,
+            symbol: { type: "polygon-3d", symbolLayers: [{ type: "fill",
+                material: { color: [24, 144, 255, 0.35] },
+                outline: { color: [24, 144, 255, 1], size: 2 } }] }
+        };
+        const contrast = {
+            geometry: polyWgs,
+            symbol: { type: "polygon-3d", symbolLayers: [{ type: "fill",
+                material: { color: [0, 200, 83, 0.45] },
+                outline: { color: [0, 200, 83, 1], size: 2 } }] }
+        };
+        highlightLayer.add(marker);
+        contrastLayer.add(contrast);
+    }
 
     function refreshOrder() {
         const topToBottom = map.layers.toArray().reverse();
@@ -161,7 +163,8 @@
     }
     function setStatus(msg) { document.getElementById("statusText").textContent = msg; }
 
-    view.when(() => {
+    view.when(async () => {
+        await addOverlayRects();
         view.goTo(buildingsLayer.fullExtent, { duration: 2000, easing: "cubic-out" });
         refreshOrder();
     });
@@ -185,8 +188,10 @@
 
     document.getElementById("btnBldUp").addEventListener("click", () => moveUp(buildingsLayer, "建筑"));
     document.getElementById("btnBldDown").addEventListener("click", () => moveDown(buildingsLayer, "建筑"));
-    document.getElementById("btnCsvUp").addEventListener("click", () => moveUp(csvLayer, "地震"));
-    document.getElementById("btnCsvDown").addEventListener("click", () => moveDown(csvLayer, "地震"));
+    document.getElementById("btnMkUp").addEventListener("click", () => moveUp(highlightLayer, "标注"));
+    document.getElementById("btnMkDown").addEventListener("click", () => moveDown(highlightLayer, "标注"));
+    document.getElementById("btnCtrUp").addEventListener("click", () => moveUp(contrastLayer, "对照"));
+    document.getElementById("btnCtrDown").addEventListener("click", () => moveDown(contrastLayer, "对照"));
 
     let listShown = true;
     document.getElementById("btnListMode").addEventListener("click", function () {
