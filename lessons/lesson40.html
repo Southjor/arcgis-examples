@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>第10课：Camera 相机控制</title>
+    <title>第40课：点击拾取要素 hitTest</title>
     <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css">
     <script type="module" src="https://js.arcgis.com/5.0/"></script>
     <style>
@@ -11,475 +11,249 @@
         body { font-family: "Microsoft YaHei", sans-serif; }
         #mapContainer { width: 100vw; height: 100vh; }
         .page-title {
-            position: absolute;
-            top: 20px; left: 50%;
-            transform: translateX(-50%);
-            background: rgba(255,255,255,0.95);
-            padding: 10px 24px; border-radius: 6px;
-            font-size: 18px; font-weight: bold;
-            z-index: 100;
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(255,255,255,0.95); padding: 10px 24px; border-radius: 6px;
+            font-size: 18px; font-weight: bold; z-index: 100;
             box-shadow: 0 2px 8px rgba(0,0,0,0.15);
         }
         .control-panel {
-            position: absolute;
-            top: 80px; right: 20px;
-            background: rgba(255,255,255,0.95);
-            padding: 16px; border-radius: 8px;
+            position: absolute; top: 80px; right: 20px;
+            background: rgba(255,255,255,0.95); padding: 16px; border-radius: 8px;
             box-shadow: 0 2px 12px rgba(0,0,0,0.15);
-            z-index: 100; min-width: 320px; max-height: 85vh; overflow-y: auto;
+            z-index: 100; min-width: 260px;
         }
         .control-panel h3 { margin: 0 0 8px 0; font-size: 14px; color: #333; }
-        .section { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #eee; }
-        .section:last-child { border-bottom: none; margin-bottom: 0; }
-        .form-group { margin-bottom: 10px; }
-        .form-group label { display: block; font-size: 12px; color: #666; margin-bottom: 4px; }
-        .form-group label span { float: right; font-weight: bold; color: #1890ff; }
-        .form-group input[type="range"] { width: 100%; }
-        .preset-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-        .preset-row button {
-            padding: 5px 10px; font-size: 12px;
-            border: 1px solid #d9d9d9; border-radius: 4px;
-            background: white; cursor: pointer;
-            transition: all 0.2s;
-        }
-        .preset-row button:hover { border-color: #1890ff; color: #1890ff; }
-        .preset-row button.active { background: #1890ff; color: white; border-color: #1890ff; }
-        .btn-row { display: flex; gap: 8px; margin-top: 8px; }
+        .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
         .btn-row button {
-            flex: 1; padding: 7px 0;
+            flex: 1; min-width: 100px; padding: 6px 0;
             border: 1px solid #d9d9d9; border-radius: 4px;
             background: white; cursor: pointer; font-size: 12px;
         }
         .btn-row button:hover { border-color: #1890ff; color: #1890ff; }
-        .btn-row button.primary { background: #1890ff; color: white; border-color: #1890ff; }
+        .btn-row button.on { background: #1890ff; color: white; border-color: #1890ff; }
         .info-card {
             margin-top: 10px; padding: 10px 12px;
             background: #f0f5ff; border-radius: 6px;
-            border-left: 3px solid #1890ff;
+            border-left: 3px solid #1890ff; font-size: 12px; line-height: 1.8;
         }
-        .info-card .row { font-size: 12px; color: #333; margin-bottom: 2px; line-height: 1.6; }
-        .info-card .row:last-child { margin-bottom: 0; }
         .info-card .val { font-weight: bold; color: #1890ff; }
         .status-text {
-            position: absolute; bottom: 20px; left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0,0,0,0.7); color: white;
-            padding: 8px 20px; border-radius: 20px;
-            font-size: 13px; z-index: 100; pointer-events: none;
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.7); color: white; padding: 8px 20px;
+            border-radius: 20px; font-size: 13px; z-index: 100; pointer-events: none;
             white-space: nowrap;
         }
     </style>
 </head>
 <body>
-<h1 class="page-title">第10课：Camera 相机控制</h1>
+<h1 class="page-title">第40课：点击拾取要素 hitTest</h1>
 
 <div class="control-panel">
-    <div class="section">
-        <h3>📍 位置预设</h3>
-        <div class="preset-row">
-            <button data-preset="beijing" class="active">🏯 北京故宫</button>
-            <button data-preset="shanghai">🌆 上海外滩</button>
-            <button data-preset="guangzhou">🗼 广州塔</button>
-            <button data-preset="huangshan">⛰️ 黄山</button>
-        </div>
-    </div>
-
-    <div class="section">
-        <h3>🧭 朝向 heading（0~360°）</h3>
-        <div class="form-group">
-            <label>朝向：<span id="valHeading">0°</span></label>
-            <input type="range" id="sliderHeading" min="0" max="360" value="0" step="1">
-        </div>
-        <div class="preset-row">
-            <button data-heading="0">N 北</button>
-            <button data-heading="90">E 东</button>
-            <button data-heading="180">S 南</button>
-            <button data-heading="270">W 西</button>
-        </div>
-    </div>
-
-    <div class="section">
-        <h3>📐 俯仰 tilt（0~90°）</h3>
-        <div class="form-group">
-            <label>俯仰：<span id="valTilt">45°</span></label>
-            <input type="range" id="sliderTilt" min="0" max="90" value="45" step="1">
-        </div>
-        <div class="preset-row">
-            <button data-tilt="0">0° 俯视</button>
-            <button data-tilt="45">45° 倾斜</button>
-            <button data-tilt="70">70° 近地</button>
-            <button data-tilt="90">90° 平视</button>
-        </div>
-    </div>
-
-    <div class="section">
-        <h3>🔍 视场角 fov（1~170°）</h3>
-        <div class="form-group">
-            <label>视场角：<span id="valFov">55°</span></label>
-            <input type="range" id="sliderFov" min="1" max="170" value="55" step="1">
-        </div>
-        <div class="preset-row">
-            <button data-fov="20">20° 长焦</button>
-            <button data-fov="55">55° 默认</button>
-            <button data-fov="100">100° 广角</button>
-            <button data-fov="150">150° 鱼眼</button>
-        </div>
-    </div>
-
-    <div class="section">
-        <h3>📏 高度 altitude（m）</h3>
-        <div class="form-group">
-            <label>海拔高度：<span id="valAltitude">2000m</span></label>
-            <input type="range" id="sliderAltitude" min="50" max="10000" value="2000" step="10">
-        </div>
-    </div>
-
+    <h3>🖱️ 拾取设置</h3>
     <div class="btn-row">
-        <button id="btnSave" class="primary">💾 保存视角</button>
-        <button id="btnRestore">📂 恢复视角</button>
+        <button id="btnOnlyMonitor" class="on">🎯 仅拾取监测点</button>
     </div>
     <div class="btn-row">
-        <button id="btnReset">🔄 重置视角</button>
-        <button id="btnAutoRotate">🔄 自动旋转</button>
+        <button id="btnClear">🧹 清除高亮</button>
     </div>
-
-    <div class="info-card" id="infoCard">
-        <div class="row">📍 位置：<span class="val" id="infoPos">经度 116.39, 纬度 39.91</span></div>
-        <div class="row">📏 高度：<span class="val" id="infoAlt">2000 m</span></div>
-        <div class="row">🧭 heading：<span class="val" id="infoHeading">0°</span></div>
-        <div class="row">📐 tilt：<span class="val" id="infoTilt">45°</span></div>
-        <div class="row">🔍 fov：<span class="val" id="infoFov">55°</span></div>
+    <div class="info-card">
+        <div>拾取要素：<span class="val" id="pickName">未拾取</span></div>
+        <div>所属图层：<span class="val" id="pickLayer">—</span></div>
+        <div>地面坐标：<span class="val" id="pickXY">—</span></div>
+        <div>命中数：<span class="val" id="hitCount">0</span></div>
     </div>
 </div>
 
-<div class="status-text" id="statusText">Camera | 朝向：0° | 俯仰：45° | 高度：2000m | FOV：55°</div>
+<div class="status-text" id="statusText">hitTest | 点击场景中的要素进行拾取</div>
 
 <div id="mapContainer"></div>
 
 <script type="module">
-    const Map = await $arcgis.import("@arcgis/core/Map.js");
-    const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
-    const Camera = await $arcgis.import("@arcgis/core/Camera.js");
-    const Point = await $arcgis.import("@arcgis/core/geometry/Point.js");
-    const GraphicsLayer = await $arcgis.import("@arcgis/core/layers/GraphicsLayer.js");
-    const Graphic = await $arcgis.import("@arcgis/core/Graphic.js");
-    const Mesh = await $arcgis.import("@arcgis/core/geometry/Mesh.js");
+    const [Map, SceneView, FeatureLayer, GraphicsLayer, Graphic] = await $arcgis.import([
+        "@arcgis/core/Map.js",
+        "@arcgis/core/views/SceneView.js",
+        "@arcgis/core/layers/FeatureLayer.js",
+        "@arcgis/core/layers/GraphicsLayer.js",
+        "@arcgis/core/Graphic.js"
+    ]);
     const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
 
-    // 天地图底图 + 高程
     const vecLayers = getTianditu.default({ type: "vec_w" });
-    const map = new Map({
-        basemap: { baseLayers: [vecLayers.base, vecLayers.anno] },
-        ground: {
-            surface: {
-                elevationLayers: [{
-                    url: "https://www.geosceneonline.cn/image/rest/services/OpenData/ChinaTerrain3D/ImageServer/"
-                }]
-            }
-        }
-    });
-
-    // ===== 位置预设 =====
-    const presets = {
-        beijing:   { lng: 116.397, lat: 39.917, zoom: 17, alt: 2000 },
-        shanghai:  { lng: 121.491, lat: 31.240, zoom: 17, alt: 2000 },
-        guangzhou: { lng: 113.324, lat: 23.109, zoom: 17, alt: 2000 },
-        huangshan: { lng: 118.168, lat: 30.133, zoom: 16, alt: 3000 }
-    };
-
-    let currentPreset = "beijing";
-    const p = presets[currentPreset];
+    const map = new Map({ basemap: { baseLayers: [vecLayers.base, vecLayers.anno] } });
 
     const view = new SceneView({
-        container: "mapContainer",
-        map: map,
+        container: "mapContainer", map: map,
         camera: {
-            position: { longitude: p.lng, latitude: p.lat, z: p.alt },
-            heading: 0,
-            tilt: 45
-        },
-        zoom: p.zoom
+            position: { longitude: 121.498, latitude: 31.205, z: 4000 },
+            heading: 20, tilt: 60
+        }
     });
 
-    window.view = view;
-
-    let savedCamera = null;
-    let autoRotateInterval = null;
-
-    // ===== 添加 3D 参照物 =====
-    function addReferenceObjects() {
-        const layer = new GraphicsLayer({
-            title: "参照物体",
-            castShadows: true,
-            receiveShadows: true
-        });
-
-        const p = presets[currentPreset];
-
-        // 中心参照物（金色）
-        const centerBox = new Graphic({
-            geometry: Mesh.createBox(
-                new Point({ longitude: p.lng, latitude: p.lat, z: 0 }),
-                { size: { width: 200, height: 300, depth: 200 } }
-            ),
-            symbol: {
-                type: "mesh-3d",
-                symbolLayers: [{ type: "fill", material: { color: [220, 180, 100, 0.9] } }]
-            }
-        });
-
-        // 东侧方向指示物（红色）
-        const eastBox = new Graphic({
-            geometry: Mesh.createBox(
-                new Point({ longitude: p.lng + 0.003, latitude: p.lat, z: 0 }),
-                { size: { width: 80, height: 100, depth: 80 } }
-            ),
-            symbol: {
-                type: "mesh-3d",
-                symbolLayers: [{ type: "fill", material: { color: [255, 80, 80, 0.9] } }]
-            }
-        });
-
-        // 南侧方向指示物（绿色）
-        const southBox = new Graphic({
-            geometry: Mesh.createBox(
-                new Point({ longitude: p.lng, latitude: p.lat - 0.003, z: 0 }),
-                { size: { width: 80, height: 100, depth: 80 } }
-            ),
-            symbol: {
-                type: "mesh-3d",
-                symbolLayers: [{ type: "fill", material: { color: [80, 200, 80, 0.9] } }]
-            }
-        });
-
-        layer.addMany([centerBox, eastBox, southBox]);
-        map.add(layer);
-        console.log("参照物体已添加到场景");
-    }
-
-    // ===== 刷新参照物位置 =====
-    function refreshReferences() {
-        map.layers.filter(l => l.title === "参照物体").forEach(l => map.remove(l));
-        addReferenceObjects();
-    }
-
-    // ===== 应用相机参数 =====
-    function applyCamera(heading, tilt, fov, altitude) {
-        const cam = view.camera.clone();
-        cam.heading = heading;
-        cam.tilt = tilt;
-        cam.fov = fov;
-        cam.position.z = altitude;
-        view.camera = cam;
-    }
-
-    // ===== 初始化 UI =====
-    view.when(() => {
-        console.log("场景加载完成");
-        addReferenceObjects();
-        initUI();
-        updateInfo();
-    });
-
-    function initUI() {
-        // 位置预设按钮
-        document.querySelectorAll("[data-preset]").forEach(btn => {
-            btn.addEventListener("click", () => {
-                stopAutoRotate();
-                currentPreset = btn.dataset.preset;
-                const p = presets[currentPreset];
-
-                view.camera = new Camera({
-                    position: new Point({ longitude: p.lng, latitude: p.lat, z: p.alt }),
-                    heading: parseInt(document.getElementById("sliderHeading").value),
-                    tilt: parseInt(document.getElementById("sliderTilt").value)
-                });
-
-                document.querySelectorAll("[data-preset]").forEach(b => b.classList.remove("active"));
-                btn.classList.add("active");
-                refreshReferences();
-                updateAll();
-            });
-        });
-
-        // Heading 滑块
-        initSlider("sliderHeading", "valHeading", (v) => {
-            const cam = view.camera.clone();
-            cam.heading = v;
-            view.camera = cam;
-            updateAll();
-        });
-
-        // Heading 方向预设
-        document.querySelectorAll("[data-heading]").forEach(btn => {
-            btn.addEventListener("click", () => {
-                const v = parseInt(btn.dataset.heading);
-                document.getElementById("sliderHeading").value = v;
-                document.getElementById("valHeading").textContent = v + "°";
-                const cam = view.camera.clone();
-                cam.heading = v;
-                view.camera = cam;
-                updateAll();
-            });
-        });
-
-        // Tilt 滑块
-        initSlider("sliderTilt", "valTilt", (v) => {
-            const cam = view.camera.clone();
-            cam.tilt = v;
-            view.camera = cam;
-            updateAll();
-        });
-
-        document.querySelectorAll("[data-tilt]").forEach(btn => {
-            btn.addEventListener("click", () => {
-                const v = parseInt(btn.dataset.tilt);
-                document.getElementById("sliderTilt").value = v;
-                document.getElementById("valTilt").textContent = v + "°";
-                const cam = view.camera.clone();
-                cam.tilt = v;
-                view.camera = cam;
-                updateAll();
-            });
-        });
-
-        // FOV 滑块
-        initSlider("sliderFov", "valFov", (v) => {
-            const cam = view.camera.clone();
-            cam.fov = v;
-            view.camera = cam;
-            updateAll();
-        });
-
-        document.querySelectorAll("[data-fov]").forEach(btn => {
-            btn.addEventListener("click", () => {
-                const v = parseInt(btn.dataset.fov);
-                document.getElementById("sliderFov").value = v;
-                document.getElementById("valFov").textContent = v + "°";
-                const cam = view.camera.clone();
-                cam.fov = v;
-                view.camera = cam;
-                updateAll();
-            });
-        });
-
-        // Altitude 滑块
-        initSlider("sliderAltitude", "valAltitude", (v) => {
-            const cam = view.camera.clone();
-            cam.position.z = v;
-            view.camera = cam;
-            updateAll();
-        });
-
-        // 保存视角
-        document.getElementById("btnSave").addEventListener("click", () => {
-            savedCamera = view.camera.clone();
-            document.getElementById("statusText").textContent = "💾 视角已保存！";
-            setTimeout(updateStatusText, 1500);
-        });
-
-        // 恢复视角
-        document.getElementById("btnRestore").addEventListener("click", () => {
-            stopAutoRotate();
-            if (savedCamera) {
-                view.camera = savedCamera;
-                syncSlidersFromCamera();
-                updateAll();
-                document.getElementById("statusText").textContent = "📂 视角已恢复！";
-                setTimeout(updateStatusText, 1500);
-            } else {
-                document.getElementById("statusText").textContent = "⚠️ 尚未保存视角，请先点击「保存视角」";
-                setTimeout(updateStatusText, 2000);
-            }
-        });
-
-        // 重置视角
-        document.getElementById("btnReset").addEventListener("click", () => {
-            stopAutoRotate();
-            const p = presets[currentPreset];
-            view.camera = new Camera({
-                position: new Point({ longitude: p.lng, latitude: p.lat, z: 2000 }),
-                heading: 0,
-                tilt: 45,
-                fov: 55
-            });
-            syncSlidersFromCamera();
-            updateAll();
-        });
-
-        // 自动旋转
-        document.getElementById("btnAutoRotate").addEventListener("click", () => {
-            if (autoRotateInterval) {
-                stopAutoRotate();
-                document.getElementById("btnAutoRotate").textContent = "🔄 自动旋转";
-                document.getElementById("btnAutoRotate").classList.remove("primary");
-            } else {
-                autoRotateInterval = setInterval(() => {
-                    const cam = view.camera.clone();
-                    cam.heading = (cam.heading + 0.5) % 360;
-                    view.camera = cam;
-                    document.getElementById("sliderHeading").value = Math.round(cam.heading);
-                    document.getElementById("valHeading").textContent = Math.round(cam.heading) + "°";
-                    updateInfo();
-                    updateStatusText();
-                }, 50);
-                document.getElementById("btnAutoRotate").textContent = "⏸ 停止旋转";
-                document.getElementById("btnAutoRotate").classList.add("primary");
+    // ===== 监测点图层（客户端 FeatureLayer，唯一值着色） =====
+    function buildMonitorLayer() {
+        const cats = ["A类", "B类", "C类"];
+        const colors = {
+            "A类": [227, 74, 51],
+            "B类": [56, 135, 220],
+            "C类": [60, 180, 110]
+        };
+        const graphics = [];
+        for (let i = 0; i < 80; i++) {
+            const cat = cats[i % 3];
+            graphics.push(new Graphic({
+                geometry: {
+                    type: "point",
+                    x: 121.46 + Math.random() * 0.08,
+                    y: 31.18 + Math.random() * 0.06,
+                    z: 80 + Math.random() * 400,
+                    spatialReference: { wkid: 4326 }
+                },
+                attributes: {
+                    OBJECTID: i + 1,
+                    NAME: "监测点" + (i + 1),
+                    CATEGORY: cat
+                }
+            }));
+        }
+        return new FeatureLayer({
+            source: graphics,
+            objectIdField: "OBJECTID",
+            fields: [
+                { name: "OBJECTID", type: "oid" },
+                { name: "NAME", type: "string" },
+                { name: "CATEGORY", type: "string" }
+            ],
+            geometryType: "point",
+            spatialReference: { wkid: 4326 },
+            title: "实时监测点",
+            elevationInfo: { mode: "relative-to-ground" },
+            renderer: {
+                type: "unique-value",
+                field: "CATEGORY",
+                uniqueValueInfos: cats.map(cat => ({
+                    value: cat,
+                    symbol: {
+                        type: "point-3d",
+                        symbolLayers: [{
+                            type: "object",
+                            resource: { primitive: "sphere" },
+                            width: 220, height: 220, depth: 220,
+                            material: { color: colors[cat] }
+                        }]
+                    }
+                }))
             }
         });
     }
 
-    function initSlider(sliderId, valId, callback) {
-        const slider = document.getElementById(sliderId);
-        const valSpan = document.getElementById(valId);
-        slider.addEventListener("input", () => {
-            const v = parseInt(slider.value);
-            valSpan.textContent = v + (sliderId === "sliderAltitude" ? "m" : "°");
-            callback(v);
+    // ===== 建筑体图层（GraphicsLayer，立方体） =====
+    function buildBuildingLayer() {
+        const layer = new GraphicsLayer({ title: "重点建筑体" });
+        const bases = [
+            { x: 121.490, y: 31.230, h: 900, c: [120, 170, 230] },
+            { x: 121.495, y: 31.225, h: 1400, c: [230, 160, 70] },
+            { x: 121.500, y: 31.220, h: 700, c: [120, 200, 160] },
+            { x: 121.485, y: 31.218, h: 1100, c: [200, 120, 200] }
+        ];
+        bases.forEach((b, idx) => {
+            layer.add(new Graphic({
+                geometry: {
+                    type: "point",
+                    x: b.x, y: b.y, z: 0,
+                    spatialReference: { wkid: 4326 }
+                },
+                symbol: {
+                    type: "point-3d",
+                    symbolLayers: [{
+                        type: "object",
+                        resource: { primitive: "cube" },
+                        width: 350, depth: 350, height: b.h,
+                        material: { color: b.c }
+                    }]
+                },
+                attributes: { NAME: "建筑" + (idx + 1) }
+            }));
         });
+        return layer;
     }
 
-    function syncSlidersFromCamera() {
-        const cam = view.camera;
-        document.getElementById("sliderHeading").value = Math.round(cam.heading);
-        document.getElementById("valHeading").textContent = Math.round(cam.heading) + "°";
-        document.getElementById("sliderTilt").value = Math.round(cam.tilt);
-        document.getElementById("valTilt").textContent = Math.round(cam.tilt) + "°";
-        document.getElementById("sliderFov").value = Math.round(cam.fov);
-        document.getElementById("valFov").textContent = Math.round(cam.fov) + "°";
-        document.getElementById("sliderAltitude").value = Math.round(cam.position.z);
-        document.getElementById("valAltitude").textContent = Math.round(cam.position.z) + "m";
-    }
+    const monitorLayer = buildMonitorLayer();
+    const buildingLayer = buildBuildingLayer();
+    map.addMany([buildingLayer, monitorLayer]);
 
-    function stopAutoRotate() {
-        if (autoRotateInterval) {
-            clearInterval(autoRotateInterval);
-            autoRotateInterval = null;
-            document.getElementById("btnAutoRotate").textContent = "🔄 自动旋转";
-            document.getElementById("btnAutoRotate").classList.remove("primary");
+    // ===== 点击拾取（hitTest） =====
+    let onlyMonitor = true;       // 是否仅拾取监测点图层
+    let highlightHandle = null;   // 上一次高亮句柄
+
+    function clearHighlight() {
+        if (highlightHandle) {
+            highlightHandle.remove();
+            highlightHandle = null;
         }
     }
 
-    function updateAll() {
-        updateInfo();
-        updateStatusText();
-    }
+    view.on("click", async (event) => {
+        // 独立使用时传入 event（含 x/y 屏幕坐标）；include 限定参与拾取的图层
+        const hit = await view.hitTest(
+            event,
+            onlyMonitor ? { include: [monitorLayer] } : undefined
+        );
+        const results = (hit.results || []).filter(r => r.type === "graphic");
+        document.getElementById("hitCount").textContent = results.length;
 
-    function updateInfo() {
-        const cam = view.camera;
-        document.getElementById("infoPos").textContent =
-            `经度 ${cam.position.longitude.toFixed(4)}, 纬度 ${cam.position.latitude.toFixed(4)}`;
-        document.getElementById("infoAlt").textContent = Math.round(cam.position.z) + " m";
-        document.getElementById("infoHeading").textContent = Math.round(cam.heading) + "°";
-        document.getElementById("infoTilt").textContent = Math.round(cam.tilt) + "°";
-        document.getElementById("infoFov").textContent = Math.round(cam.fov) + "°";
-    }
+        clearHighlight();
 
-    function updateStatusText() {
-        const cam = view.camera;
-        document.getElementById("statusText").textContent =
-            `Camera | 朝向：${Math.round(cam.heading)}° | 俯仰：${Math.round(cam.tilt)}° | 高度：${Math.round(cam.position.z)}m | FOV：${Math.round(cam.fov)}°`;
-    }
+        if (results.length === 0) {
+            // 未命中要素时，取地面交点坐标
+            const ground = (hit.results || []).find(r => r.type === "ground");
+            document.getElementById("pickName").textContent = "未命中要素";
+            document.getElementById("pickLayer").textContent = "—";
+            document.getElementById("pickXY").textContent = ground
+                ? ground.mapPoint.longitude.toFixed(4) + ", " + ground.mapPoint.latitude.toFixed(4)
+                : "—";
+            setStatus("点击位置无可选要素（命中 " + results.length + " 个图形）");
+            return;
+        }
+
+        // 取最上层（results 已按渲染层级从顶到底排序）
+        const top = results[0];
+        const graphic = top.graphic;
+        const layer = top.layer;
+        const mapPoint = top.mapPoint;
+
+        document.getElementById("pickName").textContent =
+            graphic.attributes && graphic.attributes.NAME ? graphic.attributes.NAME : "要素";
+        document.getElementById("pickLayer").textContent = layer ? layer.title : "—";
+        document.getElementById("pickXY").textContent =
+            mapPoint.longitude.toFixed(4) + ", " + mapPoint.latitude.toFixed(4);
+
+        // 高亮被拾取的要素
+        const lv = await view.whenLayerView(layer);
+        highlightHandle = lv.highlight(graphic);
+
+        setStatus("已拾取：" + (graphic.attributes && graphic.attributes.NAME || "要素") +
+            "（共 " + results.length + " 个命中）");
+    });
+
+    await view.when();
+    // 默认定位：自动框选数据范围，确保初始视角合适
+    await monitorLayer.when();
+    view.goTo(monitorLayer.fullExtent, { duration: 1500 }).catch(() => {});
+    setStatus("hitTest 就绪 | 点击场景中的球体或建筑进行拾取");
+
+    function setStatus(msg) { document.getElementById("statusText").textContent = msg; }
+
+    // 切换「仅拾取监测点」
+    document.getElementById("btnOnlyMonitor").addEventListener("click", function () {
+        onlyMonitor = !onlyMonitor;
+        this.classList.toggle("on", onlyMonitor);
+        setStatus(onlyMonitor ? "仅拾取监测点图层" : "拾取全部图层要素");
+    });
+    // 清除高亮
+    document.getElementById("btnClear").addEventListener("click", () => {
+        clearHighlight();
+        setStatus("已清除高亮");
+    });
 </script>
 </body>
 </html>
