@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>第31课：VoxelVariable 与 VoxelVolume</title>
+    <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css">
+    <script type="module" src="https://js.arcgis.com/5.0/"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: "Microsoft YaHei", sans-serif; }
+        #mapContainer { width: 100vw; height: 100vh; }
+        .page-title {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(255,255,255,0.95); padding: 10px 24px; border-radius: 6px;
+            font-size: 18px; font-weight: bold; z-index: 100;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .control-panel {
+            position: absolute; top: 80px; right: 20px;
+            background: rgba(255,255,255,0.95); padding: 16px; border-radius: 8px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+            z-index: 100; min-width: 320px;
+        }
+        .control-panel h3 { margin: 0 0 8px 0; font-size: 14px; color: #333; }
+        .section { margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+        .section:last-child { border-bottom: none; margin-bottom: 0; }
+        .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+        .btn-row button, .btn-row select {
+            flex: 1; min-width: 60px; padding: 6px 0;
+            border: 1px solid #d9d9d9; border-radius: 4px;
+            background: white; cursor: pointer; font-size: 12px;
+        }
+        .btn-row button:hover { border-color: #1890ff; color: #1890ff; }
+        .btn-row button.on { background: #1890ff; color: white; border-color: #1890ff; }
+        .info-card {
+            margin-top: 10px; padding: 10px 12px;
+            background: #f0f5ff; border-radius: 6px;
+            border-left: 3px solid #1890ff; font-size: 12px; line-height: 1.6;
+        }
+        .info-card .val { font-weight: bold; color: #1890ff; }
+        .status-text {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.7); color: white; padding: 8px 20px;
+            border-radius: 20px; font-size: 13px; z-index: 100; pointer-events: none;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+<h1 class="page-title">第31课：VoxelVariable 与 VoxelVolume</h1>
+
+<div class="control-panel">
+    <div class="section">
+        <h3>🗂️ 数据源（连续 / 离散）</h3>
+        <div class="btn-row">
+            <select id="selDataset">
+                <option value="continuous">连续 VoxelPM10</option>
+                <option value="discrete">离散 VoxelPM10_Discrete</option>
+            </select>
+        </div>
+    </div>
+    <div class="section">
+        <h3>📐 垂直夸张（VolumeStyle）</h3>
+        <div class="btn-row">
+            <button id="btnExag1" class="on">1×</button>
+            <button id="btnExag10">10×</button>
+            <button id="btnExag100">100×</button>
+        </div>
+    </div>
+    <div class="section">
+        <h3>🔀 切换变量（currentVariableId）</h3>
+        <div class="btn-row">
+            <select id="selVar"></select>
+        </div>
+    </div>
+    <div class="section" id="secContinuous">
+        <h3>🎨 连续变量配色（transferFunction）</h3>
+        <div class="btn-row">
+            <button id="btnRamp" class="on">蓝-红</button>
+            <button id="btnPopup">弹窗：开</button>
+        </div>
+    </div>
+    <div class="section" id="secDiscrete" style="display:none;">
+        <h3>🎨 离散变量配色（uniqueValues）</h3>
+        <div class="btn-row">
+            <button id="btnPalette" class="on">配色 A</button>
+            <button id="btnPopup2">弹窗：开</button>
+        </div>
+    </div>
+    <div class="info-card">
+        <div>变量列表：</div>
+        <div class="val" id="varList" style="font-weight:normal;">加载中...</div>
+        <div style="margin-top:6px;">体积类型：<span class="val" id="volType">-</span></div>
+        <div>体素尺寸：<span class="val" id="volSize">-</span></div>
+    </div>
+</div>
+
+<div class="status-text" id="statusText">VoxelVariable / VoxelVolume | 元信息 + 样式</div>
+
+<div id="mapContainer"></div>
+
+<script type="module">
+    const Map = await $arcgis.import("@arcgis/core/Map.js");
+    const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
+    const VoxelLayer = await $arcgis.import("@arcgis/core/layers/VoxelLayer.js");
+    const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
+
+    const vecLayers = getTianditu.default({ type: "vec_w" });
+    const map = new Map({ basemap: { baseLayers: [vecLayers.base, vecLayers.anno] } });
+
+    const view = new SceneView({
+        container: "mapContainer", map: map,
+        viewingMode: "local",
+        camera: { position: { longitude: 116.4, latitude: 39.9, z: 2000000 }, heading: 0, tilt: 60 }
+    });
+    window.view = view;
+
+    // 连续变量体元数据（PM10，连续场）
+    const contLayer = new VoxelLayer({
+        url: "https://gs3d.geosceneonline.cn/server/rest/services/Hosted/VoxelPM10/SceneServer"
+    });
+    // 离散变量体元数据（PM10，分类场，用于演示 uniqueValues）
+    const discLayer = new VoxelLayer({
+        url: "https://gs3d.geosceneonline.cn/server/rest/services/Hosted/VoxelPM10_Discrete/SceneServer"
+    });
+    map.addMany([contLayer, discLayer]);
+    discLayer.visible = false;          // 默认展示连续数据源
+
+    let activeLayer = contLayer;
+    let volumeStyle = null;
+    let rampBlueRed = true;
+    let discretePaletteA = true;
+
+    // 连续变量：切换 transferFunction.colorStops 色带
+    function applyRamp() {
+        const vs = activeLayer.getVariableStyle(activeLayer.currentVariableId);
+        const tf = vs.transferFunction;
+        tf.colorStops = rampBlueRed
+            ? [
+                { color: [0, 0, 255, 255], position: 0 },
+                { color: [0, 255, 255, 255], position: 0.5 },
+                { color: [255, 0, 0, 255], position: 1 }
+            ]
+            : [
+                { color: [0, 128, 0, 255], position: 0 },
+                { color: [255, 255, 0, 255], position: 0.5 },
+                { color: [128, 0, 128, 255], position: 1 }
+            ];
+    }
+
+    // 离散变量：重新着色 uniqueValues，演示离散分类配色
+    const paletteA = [
+        [210, 180, 90, 255], [120, 90, 60, 255], [200, 200, 200, 255],
+        [90, 160, 210, 255], [160, 90, 180, 255], [90, 180, 120, 255]
+    ];
+    const paletteB = [
+        [255, 127, 0, 255], [255, 0, 127, 255], [127, 0, 255, 255],
+        [0, 127, 255, 255], [0, 255, 127, 255], [255, 255, 0, 255]
+    ];
+    function applyDiscretePalette() {
+        const vs = discLayer.getVariableStyle(discLayer.currentVariableId);
+        const uv = vs.uniqueValues;
+        const palette = discretePaletteA ? paletteA : paletteB;
+        if (uv && uv.length) {
+            // 服务已预置分类：按调色板重新着色
+            uv.forEach((u, i) => { u.color = palette[i % palette.length]; });
+        } else {
+            // 兜底：服务未预置时手动构造示例分类
+            vs.uniqueValues = palette.map((c, i) => ({
+                value: i, label: "类别" + i, color: c
+            }));
+        }
+    }
+
+    // 根据当前数据源刷新变量下拉与元信息
+    function refreshUI() {
+        const selVar = document.getElementById("selVar");
+        selVar.innerHTML = "";
+        const varText = activeLayer.variables.map(v => `#${v.id} ${v.name}(${v.unit})`).join("  ");
+        document.getElementById("varList").textContent = varText;
+        activeLayer.variables.forEach(v => {
+            const opt = document.createElement("option");
+            opt.value = v.id;
+            opt.textContent = `#${v.id} ${v.name}`;
+            selVar.appendChild(opt);
+        });
+        const vol = activeLayer.volumes.getItemAt(0);
+        document.getElementById("volType").textContent = vol.volumeType;
+        document.getElementById("volSize").textContent = vol.sizeInVoxels.join(" × ");
+        volumeStyle = activeLayer.getVolumeStyle(0);
+    }
+
+    view.when(() => {
+        Promise.all([contLayer.when(), discLayer.when()]).then(() => {
+            refreshUI();
+            activeLayer.popupEnabled = true;   // 体素弹窗
+            applyRamp();                       // 默认连续配色
+            view.goTo(contLayer.fullExtent, { duration: 2000 });
+        }).catch(err => {
+            document.getElementById("statusText").textContent = "加载失败";
+            console.error(err);
+        });
+    });
+
+    function setExag(val, btn) {
+        if (volumeStyle) volumeStyle.verticalExaggeration = val;
+        document.querySelectorAll("#btnExag1, #btnExag10, #btnExag100").forEach(b => b.classList.remove("on"));
+        btn.classList.add("on");
+        document.getElementById("statusText").textContent = "垂直夸张 = " + val + "×";
+    }
+
+    document.getElementById("btnExag1").addEventListener("click", function () { setExag(1, this); });
+    document.getElementById("btnExag10").addEventListener("click", function () { setExag(10, this); });
+    document.getElementById("btnExag100").addEventListener("click", function () { setExag(100, this); });
+
+    // 数据源切换：连续 <-> 离散
+    document.getElementById("selDataset").addEventListener("change", function () {
+        const isDiscrete = this.value === "discrete";
+        contLayer.visible = !isDiscrete;
+        discLayer.visible = isDiscrete;
+        activeLayer = isDiscrete ? discLayer : contLayer;
+        volumeStyle = null;
+        refreshUI();
+        if (isDiscrete) {
+            applyDiscretePalette();
+            document.getElementById("secContinuous").style.display = "none";
+            document.getElementById("secDiscrete").style.display = "block";
+            document.getElementById("statusText").textContent = "数据源 = 离散 VoxelPM10_Discrete";
+        } else {
+            applyRamp();
+            document.getElementById("secContinuous").style.display = "block";
+            document.getElementById("secDiscrete").style.display = "none";
+            document.getElementById("statusText").textContent = "数据源 = 连续 VoxelPM10";
+        }
+    });
+
+    // 切换当前变量
+    document.getElementById("selVar").addEventListener("change", function () {
+        activeLayer.currentVariableId = Number(this.value);
+        if (activeLayer === contLayer) applyRamp(); else applyDiscretePalette();
+        document.getElementById("statusText").textContent = "当前变量 = " + this.value;
+    });
+
+    // 连续：切换配色方案
+    document.getElementById("btnRamp").addEventListener("click", function () {
+        rampBlueRed = !rampBlueRed;
+        applyRamp();
+        this.textContent = rampBlueRed ? "蓝-红" : "绿-紫";
+        this.classList.toggle("on", rampBlueRed);
+    });
+
+    // 离散：切换分类配色方案
+    document.getElementById("btnPalette").addEventListener("click", function () {
+        discretePaletteA = !discretePaletteA;
+        applyDiscretePalette();
+        this.textContent = discretePaletteA ? "配色 A" : "配色 B";
+        this.classList.toggle("on", discretePaletteA);
+    });
+
+    // 弹窗开/关（连续）
+    document.getElementById("btnPopup").addEventListener("click", function () {
+        contLayer.popupEnabled = !contLayer.popupEnabled;
+        this.classList.toggle("on", contLayer.popupEnabled);
+        this.textContent = contLayer.popupEnabled ? "弹窗：开" : "弹窗：关";
+    });
+
+    // 弹窗开/关（离散）
+    document.getElementById("btnPopup2").addEventListener("click", function () {
+        discLayer.popupEnabled = !discLayer.popupEnabled;
+        this.classList.toggle("on", discLayer.popupEnabled);
+        this.textContent = discLayer.popupEnabled ? "弹窗：开" : "弹窗：关";
+    });
+</script>
+</body>
+</html>
