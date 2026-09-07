@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>第30a课：体元弹窗与数据查询</title>
+    <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css">
+    <script type="module" src="https://js.arcgis.com/5.0/"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: "Microsoft YaHei", sans-serif; }
+        #mapContainer { width: 100vw; height: 100vh; }
+        .page-title {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(255,255,255,0.95); padding: 10px 24px; border-radius: 6px;
+            font-size: 18px; font-weight: bold; z-index: 100;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .control-panel {
+            position: absolute; top: 80px; right: 20px;
+            background: rgba(255,255,255,0.95); padding: 16px; border-radius: 8px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+            z-index: 100; min-width: 320px;
+        }
+        .control-panel h3 { margin: 0 0 8px 0; font-size: 14px; color: #333; }
+        .section { margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+        .section:last-child { border-bottom: none; margin-bottom: 0; }
+        .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+        .btn-row button {
+            flex: 1; min-width: 90px; padding: 6px 0;
+            border: 1px solid #d9d9d9; border-radius: 4px;
+            background: white; cursor: pointer; font-size: 12px;
+        }
+        .btn-row button:hover { border-color: #1890ff; color: #1890ff; }
+        .btn-row button.on { background: #1890ff; color: white; border-color: #1890ff; }
+        .info-card {
+            margin-top: 10px; padding: 10px 12px;
+            background: #f0f5ff; border-radius: 6px;
+            border-left: 3px solid #1890ff; font-size: 12px; line-height: 1.7;
+        }
+        .info-card .val { font-weight: bold; color: #1890ff; }
+        .status-text {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.7); color: white; padding: 8px 20px;
+            border-radius: 20px; font-size: 13px; z-index: 100; pointer-events: none;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+<h1 class="page-title">第30a课：体元弹窗与数据查询</h1>
+
+<div class="control-panel">
+    <div class="section">
+        <h3>🖱️ 弹窗开关</h3>
+        <div class="btn-row">
+            <button id="btnEnabled" class="on">popupEnabled：开</button>
+        </div>
+    </div>
+    <div class="section">
+        <h3>🧾 弹窗模板</h3>
+        <div class="btn-row">
+            <button id="btnCustom" class="on">自定义模板（含 Voxel 字段）</button>
+        </div>
+        <div class="btn-row">
+            <button id="btnDefault">createPopupTemplate 官方默认</button>
+        </div>
+    </div>
+    <div class="section">
+        <h3>🔎 字段查询</h3>
+        <div class="btn-row">
+            <button id="btnGetField">getField("Voxel.Depth")</button>
+            <button id="btnGetVar">getVariable(null)</button>
+        </div>
+    </div>
+    <div class="info-card">
+        <div>固定字段数：<span class="val" id="fixedCount">-</span>（Voxel.* 前缀）</div>
+        <div>变量字段数：<span class="val" id="varFieldCount">-</span></div>
+        <div>弹窗模板：<span class="val" id="curTpl">自定义</span></div>
+    </div>
+</div>
+
+<div class="status-text" id="statusText">体元弹窗 | 点击体素查看属性（含 Voxel 固定字段）</div>
+
+<div id="mapContainer"></div>
+
+<script type="module">
+    const Map = await $arcgis.import("@arcgis/core/Map.js");
+    const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
+    const VoxelLayer = await $arcgis.import("@arcgis/core/layers/VoxelLayer.js");
+    const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
+
+    const vecLayers = getTianditu.default({ type: "vec_w" });
+    const map = new Map({ basemap: { baseLayers: [vecLayers.base, vecLayers.anno] } });
+
+    const view = new SceneView({
+        container: "mapContainer", map: map,
+        viewingMode: "local",
+        camera: { position: { longitude: 116.4, latitude: 39.9, z: 2000000 }, heading: 0, tilt: 60 }
+    });
+    window.view = view;
+
+    const voxelLayer = new VoxelLayer({
+        url: "https://gs3d.geosceneonline.cn/server/rest/services/Hosted/VoxelPM10/SceneServer"
+    });
+    map.add(voxelLayer);
+
+    const FIXED_PREFIX = "Voxel.";
+
+    // 自定义弹窗模板：动态枚举 layer.fields（固定字段 + 变量字段）
+    function buildCustomTemplate() {
+        const infos = voxelLayer.fields.map(f => ({
+            fieldName: f.name,
+            label: f.alias || f.name
+        }));
+        return {
+            title: "体素详情（{Voxel.Position}）",
+            content: [{
+                type: "fields",
+                fieldInfos: infos
+            }]
+        };
+    }
+
+    view.when(() => {
+        voxelLayer.when(() => {
+            voxelLayer.popupEnabled = true;
+
+            // fields（4.31+）：固定体素字段 + 各变量字段
+            const fixed = [], vars = [];
+            voxelLayer.fields.forEach(f => {
+                (f.name.startsWith(FIXED_PREFIX) ? fixed : vars).push(f.name);
+            });
+            document.getElementById("fixedCount").textContent = fixed.length;
+            document.getElementById("varFieldCount").textContent = vars.length;
+
+            // 默认使用自定义模板
+            voxelLayer.popupTemplate = buildCustomTemplate();
+            view.goTo(voxelLayer.fullExtent, { duration: 2000 });
+        }).catch(err => {
+            document.getElementById("statusText").textContent = "体元图层加载失败";
+            console.error(err);
+        });
+    });
+
+    function setStatus(msg) { document.getElementById("statusText").textContent = msg; }
+
+    // 弹窗开关（popupEnabled，4.26+）
+    document.getElementById("btnEnabled").addEventListener("click", function () {
+        voxelLayer.popupEnabled = !voxelLayer.popupEnabled;
+        this.classList.toggle("on", voxelLayer.popupEnabled);
+        this.textContent = "popupEnabled：" + (voxelLayer.popupEnabled ? "开" : "关");
+        setStatus("popupEnabled = " + voxelLayer.popupEnabled);
+    });
+
+    // 自定义模板：手动组织 fieldInfos，可控制顺序与中文标签
+    document.getElementById("btnCustom").addEventListener("click", function () {
+        voxelLayer.popupTemplate = buildCustomTemplate();
+        document.querySelectorAll("#btnCustom, #btnDefault").forEach(b => b.classList.remove("on"));
+        this.classList.add("on");
+        document.getElementById("curTpl").textContent = "自定义";
+        setStatus("已应用自定义模板（固定字段 + 变量字段，中文标签）");
+    });
+
+    // 官方默认模板：createPopupTemplate() 自动填充体素固定字段与变量字段
+    document.getElementById("btnDefault").addEventListener("click", function () {
+        const tpl = voxelLayer.createPopupTemplate();
+        if (tpl) voxelLayer.popupTemplate = tpl;
+        document.querySelectorAll("#btnCustom, #btnDefault").forEach(b => b.classList.remove("on"));
+        this.classList.add("on");
+        document.getElementById("curTpl").textContent = "官方默认";
+        setStatus("已应用 createPopupTemplate() 生成的官方默认模板");
+    });
+
+    // getField（4.31+）：按字段名取 Field（不区分大小写）
+    document.getElementById("btnGetField").addEventListener("click", () => {
+        const f = voxelLayer.getField("Voxel.Depth");
+        if (f) {
+            setStatus(`getField("Voxel.Depth") → alias="${f.alias}", type=${f.type}（仅 xyz/xyzt 体积类型有深度）`);
+        } else {
+            setStatus('getField("Voxel.Depth") → 未找到（该体积类型可能无 Depth 字段）');
+        }
+    });
+
+    // getVariable(null)：返回当前变量
+    document.getElementById("btnGetVar").addEventListener("click", () => {
+        const v = voxelLayer.getVariable(null);
+        if (v) {
+            setStatus(`getVariable(null) → #${v.id} ${v.name}（unit: ${v.unit}），当前显示中`);
+        } else {
+            setStatus("getVariable(null) → 未取到当前变量");
+        }
+    });
+</script>
+</body>
+</html>
