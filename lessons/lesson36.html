@@ -54,9 +54,6 @@
         <button id="btnPlay" class="on">⏸️ 暂停推送</button>
         <button id="btnClear">🧹 清空轨迹</button>
     </div>
-    <div class="btn-row">
-        <button id="btnTrail" class="on">🛤️ 保留历史轨迹</button>
-    </div>
     <div class="info-card">
         <div>推送状态：<span class="val" id="playState">运行中</span></div>
         <div>车辆数量：<span class="val" id="carCount">0</span></div>
@@ -69,10 +66,11 @@
 <div id="mapContainer"></div>
 
 <script type="module">
-    const [Map, SceneView, StreamLayer] = await $arcgis.import([
+    const [Map, SceneView, StreamLayer, Extent] = await $arcgis.import([
         "@arcgis/core/Map.js",
         "@arcgis/core/views/SceneView.js",
-        "@arcgis/core/layers/StreamLayer.js"
+        "@arcgis/core/layers/StreamLayer.js",
+        "@arcgis/core/geometry/Extent.js"
     ]);
     const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
 
@@ -99,7 +97,8 @@
         geometryType: "point",
         spatialReference: { wkid: 4326 },
         updateInterval: 100,
-        purgeOptions: { displayCount: 2000 },
+        // 每条轨迹保留 40 个观测点（默认 1，即只显示最新位置）；purgeOptions 加载后不可修改
+        purgeOptions: { displayCount: 2000, maxObservations: 40 },
         elevationInfo: { mode: "relative-to-ground" },
         renderer: {
             type: "simple",
@@ -130,6 +129,7 @@
         });
     }
 
+    let objectIdCounter = 1; // 每条推送要素都需要唯一 OBJECTID（官方示例用自增计数器）
     let msgCount = 0;
     let playing = true;
     let timer = null;
@@ -143,7 +143,7 @@
             if (c.lat < 31.19 || c.lat > 31.26) c.dLat *= -1;
             return {
                 geometry: { x: c.lon, y: c.lat, z: c.z, spatialReference: { wkid: 4326 } },
-                attributes: { TRACKID: c.id, SPEED: Math.round(20 + Math.random() * 40) }
+                attributes: { OBJECTID: objectIdCounter++, TRACKID: c.id, SPEED: Math.round(20 + Math.random() * 40) }
             };
         });
         // 官方客户端流式推送 API
@@ -160,12 +160,12 @@
     startTimer();
     setStatus("StreamLayer 已连接 | 每 0.5 秒推送一帧位置");
     // 默认定位：框选车辆活动区域（车辆在此范围内移动）
-    const region = {
-        type: "extent",
+    // goTo 的目标要传几何实例，官方 GoToTarget 里没有 {type:"extent"} 这种 JSON 形态
+    const region = new Extent({
         xmin: 121.45, xmax: 121.55,
         ymin: 31.18, ymax: 31.27,
         spatialReference: { wkid: 4326 }
-    };
+    });
     view.goTo(region, { duration: 1500 }).catch(() => {});
 
     function setStatus(msg) { document.getElementById("statusText").textContent = msg; }
@@ -186,18 +186,6 @@
         msgCount = 0;
         document.getElementById("msgCount").textContent = 0;
         setStatus("轨迹已清空");
-    });
-
-    // 显示 / 隐藏轨迹线（trackInfo）
-    let trailOn = true;
-    document.getElementById("btnTrail").addEventListener("click", function () {
-        trailOn = !trailOn;
-        // 通过更新渲染是否包含线来控制；此处简化为切换图层的连线可见性
-        view.whenLayerView(streamLayer).then((lv) => {
-            lv.maximumNumberOfFeatures = trailOn ? 2000 : CAR_NUM;
-        });
-        this.classList.toggle("on", trailOn);
-        setStatus(trailOn ? "显示历史轨迹点" : "仅显示最新位置");
     });
 </script>
 </body>
