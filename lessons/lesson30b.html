@@ -58,7 +58,7 @@
             <button id="btnOpLow" class="on">低值透明</button>
             <button id="btnOpHigh">高值透明</button>
         </div>
-        <div style="font-size:11px;color:#888;margin-top:4px;">透明化让内部结构可见 —— 体元体积渲染的灵魂</div>
+        <div style="font-size:11px;color:#888;margin-top:4px;">透明化让内部结构可见</div>
     </div>
 
     <div class="section">
@@ -94,14 +94,10 @@
         viewingMode: "local",
         camera: { position: { longitude: 116.4, latitude: 39.9, z: 2000000 }, heading: 0, tilt: 60 }
     });
-    window.view = view;
-
     const voxelLayer = new VoxelLayer({
         url: "https://gs3d.geosceneonline.cn/server/rest/services/Hosted/VoxelPM10/SceneServer"
     });
     map.add(voxelLayer);
-
-    const symbol = { type: "mesh-3d", symbolLayers: [{ type: "fill" }] };
 
     const cfg = { op: "low" };
     let sliceWidget = null;
@@ -164,25 +160,25 @@
         });
     });
 
-    function setStatus(msg) { document.getElementById("st").textContent = msg; }
+    function setStatus(msg) { document.getElementById("statusText").textContent = msg; }
 
     document.getElementById("btnOpNone").addEventListener("click", () => applyOpacity("none"));
     document.getElementById("btnOpLow").addEventListener("click", () => applyOpacity("low"));
     document.getElementById("btnOpHigh").addEventListener("click", () => applyOpacity("high"));
 
-    // 开始新切片：SliceViewModel.newSlice() 进入交互切割模式
+    // 开始新切片：SliceViewModel.start() 进入交互切割模式
     document.getElementById("btnNewSlice").addEventListener("click", function () {
         try {
-            sliceWidget.viewModel.newSlice();
+            sliceWidget.viewModel.start();
             this.classList.add("on");
             setStatus("Slice 组件切割中：拖动平面手柄调整位置（官方：体元将切片视为无限平面，忽略范围）");
         } catch (err) {
-            setStatus("newSlice 失败：" + err.message);
+            setStatus("start 失败：" + err.message);
         }
     });
 
     document.getElementById("btnSliceToggle").addEventListener("click", function () {
-        const el = sliceWidget.container || sliceWidget.domNode;
+        const el = sliceWidget.container;
         const visible = el.style.display !== "none";
         el.style.display = visible ? "none" : "block";
         this.classList.toggle("on", !visible);
