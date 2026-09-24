@@ -51,17 +51,17 @@
 <div class="control-panel">
     <h3>⛽ 加油站点位（1000 个）</h3>
     <div class="btn-row">
-        <button id="btnReduce" class="on">🔀 开启聚合</button>
+        <button id="btnReduce" class="on">🔀 开启抽稀</button>
         <button id="btnAll">🔵 全部显示</button>
     </div>
     <div class="info-card">
-        <div>聚合方式：<span class="val" id="mode">selection（3D 抽稀）</span></div>
+        <div>抽稀方式：<span class="val" id="mode">selection（3D 去重叠）</span></div>
         <div>点位总数：<span class="val">1000</span></div>
-        <div>说明：<span class="val">远距抽稀、近距散开</span></div>
+        <div>说明：<span class="val">重叠点自动隐藏，拉远更明显</span></div>
     </div>
 </div>
 
-<div class="status-text" id="statusText">FeatureReduction | 3D 场景中的点位抽稀聚合</div>
+<div class="status-text" id="statusText">FeatureReduction | 3D 场景中的点位去重叠抽稀</div>
 
 <div id="mapContainer"></div>
 
@@ -79,19 +79,19 @@
     const view = new SceneView({
         container: "mapContainer", map: map,
         camera: {
-            position: { longitude: 116.40, latitude: 39.85, z: 90000 },
+            position: { longitude: 116.40, latitude: 39.85, z: 28000 },
             heading: 0, tilt: 55
         }
     });
 
-    // ===== 生成 1000 个客户端点位（模拟全国加油站，集中在华北） =====
+    // ===== 生成 1000 个客户端点位（模拟一片密集的加油站点位，集中在约 14km×12km 范围，确保屏幕上大量重叠） =====
     const graphics = [];
     for (let i = 1; i <= 1000; i++) {
         graphics.push({
             geometry: {
                 type: "point",
-                x: 115.5 + Math.random() * 2.2,
-                y: 39.2 + Math.random() * 1.4,
+                x: 116.30 + Math.random() * 0.15,
+                y: 39.78 + Math.random() * 0.11,
                 spatialReference: { wkid: 4326 }
             },
             attributes: { ObjectID: i, name: "加油站-" + i }
@@ -107,7 +107,7 @@
             { name: "ObjectID", type: "oid" },
             { name: "name", alias: "名称", type: "string" }
         ],
-        elevationInfo: { mode: "on-the-ground" },
+        elevationInfo: { mode: "relative-to-ground" },
         renderer: {
             type: "simple",
             symbol: {
@@ -115,7 +115,7 @@
                 symbolLayers: [{
                     type: "icon",
                     resource: { primitive: "circle" },
-                    size: 10,
+                    size: 14,
                     material: { color: [230, 70, 40, 0.9] },
                     outline: { color: "white", size: 1 }
                 }]
@@ -128,27 +128,36 @@
 
     await view.when();
     await stationLayer.when();
-    view.goTo(stationLayer.fullExtent, { duration: 1500 }).catch(() => {});
+    // 把视图范围放大到数据的 5 倍，使点位在屏幕中心密集重叠，抽稀/全显的差异才看得出来
+    // （若用 goTo(fullExtent) 把点铺满整屏，彼此几乎不重叠，selection 无内容可隐藏，表现就和“全部显示”一样）
+    const bigExt = stationLayer.fullExtent.clone();
+    const cx = (bigExt.xmin + bigExt.xmax) / 2;
+    const cy = (bigExt.ymin + bigExt.ymax) / 2;
+    const hw = (bigExt.xmax - bigExt.xmin) / 2 * 5;
+    const hh = (bigExt.ymax - bigExt.ymin) / 2 * 5;
+    bigExt.xmin = cx - hw; bigExt.xmax = cx + hw;
+    bigExt.ymin = cy - hh; bigExt.ymax = cy + hh;
+    view.goTo(bigExt, { duration: 1500 }).catch(() => {});
     setStatus("已开启 selection 抽稀：重叠点位仅保留代表点");
 
     function setStatus(msg) { document.getElementById("statusText").textContent = msg; }
 
-    // 开启聚合抽稀
+    // 开启抽稀（去重叠）
     document.getElementById("btnReduce").addEventListener("click", function () {
         stationLayer.featureReduction = { type: "selection" };
         this.classList.add("on");
         document.getElementById("btnAll").classList.remove("on");
-        document.getElementById("mode").textContent = "selection（3D 抽稀）";
-        setStatus("已开启 selection 抽稀：拉远时自动减少重叠点");
+        document.getElementById("mode").textContent = "selection（3D 去重叠）";
+        setStatus("已开启 selection 抽稀：拉远时自动隐藏重叠点");
     });
 
-    // 全部显示（关闭聚合）
+    // 全部显示（关闭抽稀）
     document.getElementById("btnAll").addEventListener("click", function () {
         stationLayer.featureReduction = null;
         this.classList.add("on");
         document.getElementById("btnReduce").classList.remove("on");
         document.getElementById("mode").textContent = "无（全部渲染）";
-        setStatus("已关闭聚合：1000 个点位全部渲染");
+        setStatus("已关闭抽稀：1000 个点位全部渲染");
     });
 </script>
 </body>
