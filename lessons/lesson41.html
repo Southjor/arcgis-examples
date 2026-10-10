@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>第41课：Popup 弹出窗</title>
+    <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css">
+    <script type="module" src="https://js.arcgis.com/5.0/"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: "Microsoft YaHei", sans-serif; }
+        #mapContainer { width: 100vw; height: 100vh; }
+        .page-title {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(255,255,255,0.95); padding: 10px 24px; border-radius: 6px;
+            font-size: 18px; font-weight: bold; z-index: 100;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .control-panel {
+            position: absolute; top: 80px; right: 20px;
+            background: rgba(255,255,255,0.95); padding: 16px; border-radius: 8px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+            z-index: 100; min-width: 260px;
+        }
+        .control-panel h3 { margin: 0 0 8px 0; font-size: 14px; color: #333; }
+        .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+        .btn-row button {
+            flex: 1; min-width: 100px; padding: 6px 0;
+            border: 1px solid #d9d9d9; border-radius: 4px;
+            background: white; cursor: pointer; font-size: 12px;
+        }
+        .btn-row button:hover { border-color: #1890ff; color: #1890ff; }
+        .btn-row button.on { background: #1890ff; color: white; border-color: #1890ff; }
+        .info-card {
+            margin-top: 10px; padding: 10px 12px;
+            background: #f0f5ff; border-radius: 6px;
+            border-left: 3px solid #1890ff; font-size: 12px; line-height: 1.8;
+        }
+        .info-card .val { font-weight: bold; color: #1890ff; }
+        .status-text {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.7); color: white; padding: 8px 20px;
+            border-radius: 20px; font-size: 13px; z-index: 100; pointer-events: none;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+<h1 class="page-title">第41课：Popup 弹出窗</h1>
+
+<div class="control-panel">
+    <h3>💬 弹窗控制</h3>
+    <div class="btn-row">
+        <button id="btnOpen">📌 弹出首个监测点</button>
+        <button id="btnClose">✖️ 关闭弹窗</button>
+    </div>
+    <div class="btn-row">
+        <button id="btnToggle" class="on">🔔 点击弹窗开</button>
+    </div>
+    <div class="info-card">
+        <div>上次动作：<span class="val" id="lastAction">无</span></div>
+        <div>当前弹窗：<span class="val" id="popupTitle">无</span></div>
+    </div>
+</div>
+
+<div class="status-text" id="statusText">Popup | 点击要素查看弹出窗与自定义动作</div>
+
+<div id="mapContainer"></div>
+
+<script type="module">
+    const [Map, SceneView, FeatureLayer, GraphicsLayer, Graphic] = await $arcgis.import([
+        "@arcgis/core/Map.js",
+        "@arcgis/core/views/SceneView.js",
+        "@arcgis/core/layers/FeatureLayer.js",
+        "@arcgis/core/layers/GraphicsLayer.js",
+        "@arcgis/core/Graphic.js"
+    ]);
+    const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
+
+    const vecLayers = getTianditu.default({ type: "vec_w" });
+    const map = new Map({ basemap: { baseLayers: [vecLayers.base, vecLayers.anno] } });
+
+    const view = new SceneView({
+        container: "mapContainer", map: map,
+        camera: {
+            position: { longitude: 121.498, latitude: 31.205, z: 4000 },
+            heading: 20, tilt: 60
+        }
+    });
+
+    // ===== 监测点图层（带 PopupTemplate） =====
+    const monitorLayer = (() => {
+        const cats = ["A类", "B类", "C类"];
+        const colors = {
+            "A类": [227, 74, 51],
+            "B类": [56, 135, 220],
+            "C类": [60, 180, 110]
+        };
+        const statuses = ["正常", "预警", "故障"];
+        const graphics = [];
+        for (let i = 0; i < 80; i++) {
+            const cat = cats[i % 3];
+            graphics.push(new Graphic({
+                geometry: {
+                    type: "point",
+                    x: 121.46 + Math.random() * 0.08,
+                    y: 31.18 + Math.random() * 0.06,
+                    z: 80 + Math.random() * 400,
+                    spatialReference: { wkid: 4326 }
+                },
+                attributes: {
+                    OBJECTID: i + 1,
+                    NAME: "监测点" + (i + 1),
+                    CATEGORY: cat,
+                    STATUS: statuses[i % 3],
+                    VALUE: (Math.random() * 100).toFixed(1)
+                }
+            }));
+        }
+        return new FeatureLayer({
+            source: graphics,
+            objectIdField: "OBJECTID",
+            fields: [
+                { name: "OBJECTID", type: "oid" },
+                { name: "NAME", type: "string" },
+                { name: "CATEGORY", type: "string" },
+                { name: "STATUS", type: "string" },
+                { name: "VALUE", type: "double" }
+            ],
+            geometryType: "point",
+            spatialReference: { wkid: 4326 },
+            title: "实时监测点",
+            elevationInfo: { mode: "relative-to-ground" },
+            renderer: {
+                type: "unique-value",
+                field: "CATEGORY",
+                uniqueValueInfos: cats.map(cat => ({
+                    value: cat,
+                    symbol: {
+                        type: "point-3d",
+                        symbolLayers: [{
+                            type: "object",
+                            resource: { primitive: "sphere" },
+                            width: 220, height: 220, depth: 220,
+                            material: { color: colors[cat] }
+                        }]
+                    }
+                }))
+            },
+            // ===== PopupTemplate：标题 + 字段 + 自定义动作 =====
+            popupTemplate: {
+                title: "{NAME}",
+                content: [
+                    {
+                        type: "fields",
+                        fieldInfos: [
+                            { fieldName: "CATEGORY", label: "类别" },
+                            { fieldName: "STATUS", label: "运行状态" },
+                            { fieldName: "VALUE", label: "实时数值" }
+                        ]
+                    },
+                    {
+                        type: "text",
+                        text: "<b>提示：</b>点击右侧动作按钮执行联动操作。"
+                    }
+                ],
+                actions: [
+                    { id: "zoom", label: "缩放到", icon: "zoom-to" },
+                    { id: "highlight", label: "高亮", icon: "highlight" }
+                ]
+            }
+        });
+    })();
+
+    // ===== 建筑体图层（GraphicsLayer，独立 popupTemplate） =====
+    const buildingLayer = (() => {
+        const layer = new GraphicsLayer({ title: "重点建筑体" });
+        const bases = [
+            { x: 121.490, y: 31.230, h: 900, c: [120, 170, 230] },
+            { x: 121.495, y: 31.225, h: 1400, c: [230, 160, 70] },
+            { x: 121.500, y: 31.220, h: 700, c: [120, 200, 160] },
+            { x: 121.485, y: 31.218, h: 1100, c: [200, 120, 200] }
+        ];
+        bases.forEach((b, idx) => {
+            layer.add(new Graphic({
+                geometry: {
+                    type: "point",
+                    x: b.x, y: b.y, z: 0,
+                    spatialReference: { wkid: 4326 }
+                },
+                symbol: {
+                    type: "point-3d",
+                    symbolLayers: [{
+                        type: "object",
+                        resource: { primitive: "cube" },
+                        width: 350, depth: 350, height: b.h,
+                        material: { color: b.c }
+                    }]
+                },
+                attributes: { NAME: "建筑" + (idx + 1), HEIGHT: b.h },
+                popupTemplate: {
+                    title: "{NAME}",
+                    content: [
+                        { type: "fields", fieldInfos: [{ fieldName: "HEIGHT", label: "高度(米)" }] }
+                    ]
+                }
+            }));
+        });
+        return layer;
+    })();
+
+    map.addMany([buildingLayer, monitorLayer]);
+
+    // 记录首个监测点要素，供「弹出首个监测点」按钮使用
+    let firstFeature = null;
+    monitorLayer.queryFeatures().then((res) => {
+        firstFeature = res.features[0];
+    });
+
+    // ===== 弹窗动作交互（trigger-action） =====
+    let highlightHandle = null;
+    view.popup.on("trigger-action", (event) => {
+        const action = event.action;
+        const feature = view.popup.selectedFeature;
+        if (!feature) return;
+
+        if (action.id === "zoom") {
+            view.goTo(feature.geometry).catch(() => {});
+            setLastAction("缩放到：" + feature.attributes.NAME);
+        }
+        if (action.id === "highlight") {
+            if (highlightHandle) highlightHandle.remove();
+            view.whenLayerView(feature.layer).then((lv) => {
+                highlightHandle = lv.highlight(feature);
+            });
+            setLastAction("高亮：" + feature.attributes.NAME);
+        }
+    });
+
+    await view.when();
+    // 默认定位：自动框选数据范围，确保初始视角合适
+    await monitorLayer.when();
+    view.goTo(monitorLayer.fullExtent, { duration: 1500 }).catch(() => {});
+    setStatus("Popup 就绪 | 点击场景中的要素查看弹出窗");
+
+    function setStatus(msg) { document.getElementById("statusText").textContent = msg; }
+    function setLastAction(msg) { document.getElementById("lastAction").textContent = msg; }
+
+    // 程序化打开弹窗
+    document.getElementById("btnOpen").addEventListener("click", () => {
+        if (!firstFeature) { setStatus("要素尚未就绪"); return; }
+        view.popup.open({
+            features: [firstFeature],
+            location: firstFeature.geometry
+        });
+        setStatus("已弹出：" + firstFeature.attributes.NAME);
+    });
+    // 关闭弹窗
+    document.getElementById("btnClose").addEventListener("click", () => {
+        view.popup.close();
+        setStatus("弹窗已关闭");
+    });
+    // 点击弹窗开关
+    let popupOn = true;
+    document.getElementById("btnToggle").addEventListener("click", function () {
+        popupOn = !popupOn;
+        view.popupEnabled = popupOn;
+        this.classList.toggle("on", popupOn);
+        setStatus(popupOn ? "点击弹窗已开启" : "点击弹窗已关闭");
+    });
+
+    // 弹窗标题变化时同步到面板
+    view.popup.watch("title", (title) => {
+        document.getElementById("popupTitle").textContent = title || "无";
+    });
+</script>
+</body>
+</html>
