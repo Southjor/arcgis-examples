@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>第50课：场景组件2 - Zoom / Home / Locate / Print</title>
+    <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css">
+    <script type="module" src="https://js.arcgis.com/5.0/"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: "Microsoft YaHei", sans-serif; }
+        #sceneView { width: 100vw; height: 100vh; }
+        .page-title {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(255,255,255,0.95); padding: 10px 24px; border-radius: 6px;
+            font-size: 18px; font-weight: bold; z-index: 200;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15); pointer-events: none;
+        }
+        .panel {
+            position: absolute; top: 80px; right: 20px; width: 290px;
+            background: rgba(255,255,255,0.95); padding: 16px; border-radius: 8px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15); z-index: 200;
+        }
+        .panel h3 { margin: 0 0 8px 0; font-size: 14px; }
+        .btn-row { display: flex; gap: 8px; margin-top: 8px; }
+        .btn-row button {
+            flex: 1; padding: 6px 0; font-size: 12px;
+            border: 1px solid #d9d9d9; border-radius: 4px;
+            background: white; cursor: pointer;
+        }
+        .btn-row button:hover { border-color: #1890ff; color: #1890ff; }
+        .tip {
+            margin-top: 10px; padding: 8px; font-size: 11px; line-height: 1.6;
+            background: #fff7e6; border-left: 3px solid #faad14; border-radius: 3px; color: #614700;
+        }
+        .status {
+            position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.7); color: white; padding: 8px 20px;
+            border-radius: 20px; font-size: 13px; z-index: 200; pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+<h1 class="page-title">第50课：场景组件2 - Zoom / Home / Locate / Print</h1>
+
+<arcgis-scene id="sceneView"
+        camera-position="116.397, 39.908, 1200"
+        camera-tilt="55"
+        camera-heading="20">
+    <arcgis-zoom slot="top-left"></arcgis-zoom>
+    <arcgis-home slot="top-left"></arcgis-home>
+    <arcgis-locate slot="top-left"></arcgis-locate>
+</arcgis-scene>
+
+<div class="panel">
+    <h3>🏠 Home 回到初始视图</h3>
+    <div class="btn-row">
+        <button id="btnHome">回到初始视角</button>
+        <button id="btnSetHome">设为初始视角</button>
+    </div>
+
+    <h3 style="margin-top: 12px;">📍 Locate 定位</h3>
+    <div class="btn-row">
+        <button id="btnLocate">定位我的位置</button>
+        <button id="btnCancelLocate">取消定位</button>
+    </div>
+
+    <h3 style="margin-top: 12px;">🖨 Print 打印</h3>
+    <div class="btn-row">
+        <button id="btnCheckPrint">检测 Print 可用性</button>
+        <button id="btnExport">截图导出 PNG</button>
+    </div>
+
+    <div class="tip">
+        ⚠️ <b>Print 组件仅支持 2D MapView</b>（其 view 属性类型为 MapView）。
+        三维场景请用 <code>view.takeScreenshot()</code> 导出图片。
+        <br>📍 Locate 依赖浏览器定位，需 <b>HTTPS</b> 或 localhost 环境。
+    </div>
+</div>
+
+<div class="status" id="st">场景组件2 | 试试 Home 复位与定位功能</div>
+
+<script type="module">
+    const Map = await $arcgis.import("@arcgis/core/Map.js");
+    const GraphicsLayer = await $arcgis.import("@arcgis/core/layers/GraphicsLayer.js");
+    const Graphic = await $arcgis.import("@arcgis/core/Graphic.js");
+    const Point = await $arcgis.import("@arcgis/core/geometry/Point.js");
+    const Viewpoint = await $arcgis.import("@arcgis/core/Viewpoint.js");
+    const ElevationLayer = await $arcgis.import("@arcgis/core/layers/ElevationLayer.js");
+    const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
+
+    const tl = getTianditu.default({ type: "vec_w" });
+    const map = new Map({
+        basemap: { baseLayers: [tl.base, tl.anno] },
+        ground: {
+            surface: {
+                elevationLayers: [new ElevationLayer({
+                    url: "https://www.geosceneonline.cn/image/rest/services/OpenData/ChinaTerrain3D/ImageServer/"
+                })]
+            }
+        }
+    });
+
+    // 若干建筑体块，让场景有参照物
+    const gl = new GraphicsLayer({ title: "建筑体块" });
+    const bases = [
+        { x: 116.3920, y: 39.9050, h: 320, c: [120, 170, 230] },
+        { x: 116.3960, y: 39.9020, h: 480, c: [230, 160, 70] },
+        { x: 116.4000, y: 39.9060, h: 260, c: [120, 200, 160] },
+        { x: 116.3935, y: 39.9100, h: 400, c: [200, 120, 200] }
+    ];
+    bases.forEach((b, i) => {
+        gl.add(new Graphic({
+            geometry: new Point({ longitude: b.x, latitude: b.y, z: 0, spatialReference: { wkid: 4326 } }),
+            symbol: {
+                type: "point-3d",
+                symbolLayers: [{
+                    type: "object",
+                    resource: { primitive: "cube" },
+                    width: 120, depth: 120, height: b.h,
+                    material: { color: b.c }
+                }]
+            },
+            attributes: { OBJECTID: i + 1, NAME: "建筑" + (i + 1) }
+        }));
+    });
+    map.add(gl);
+
+    // ===== 绑定组件与视图 =====
+    const viewElement = document.querySelector("arcgis-scene");
+    const view = viewElement.view;
+    view.map = map;
+    await viewElement.viewOnReady();
+
+    const homeEl = document.querySelector("arcgis-home");
+    const locateEl = document.querySelector("arcgis-locate");
+    await homeEl.componentOnReady();
+    await locateEl.componentOnReady();
+
+    // 定位后的比例尺（导航到定位结果时应用）
+    locateEl.scale = 3000;
+
+    // goTo 目标需为 Graphic 数组（Collection 用 toArray() 转换）
+    view.goTo(gl.graphics.toArray(), { duration: 1500 }).catch(() => {});
+
+    function setStatus(msg) { document.getElementById("st").textContent = msg; }
+
+    // ===== Home =====
+    document.getElementById("btnHome").onclick = async () => {
+        await homeEl.go();
+        setStatus("已回到初始视角（homeEl.go()）");
+    };
+    document.getElementById("btnSetHome").onclick = () => {
+        // 把「当前视角」设为新的初始视角
+        homeEl.viewpoint = view.viewpoint.clone();
+        setStatus("已把当前视角设为初始视角，之后点 Home 会回到这里");
+    };
+
+    // ===== Locate 事件 =====
+    locateEl.addEventListener("arcgisSuccess", (e) => {
+        const coords = e.detail?.position?.coords;
+        if (coords) {
+            setStatus("定位成功：纬度 " + coords.latitude.toFixed(5) + "，经度 " + coords.longitude.toFixed(5));
+        } else {
+            setStatus("定位成功（详细坐标见控制台）");
+        }
+    });
+    locateEl.addEventListener("arcgisError", (e) => {
+        const err = e.detail?.error;
+        setStatus("定位失败：" + (err ? err.message : "请确认在 HTTPS 或 localhost 下运行，并已授权定位"));
+    });
+
+    document.getElementById("btnLocate").onclick = async () => {
+        setStatus("正在获取位置...");
+        await locateEl.locate();
+    };
+    document.getElementById("btnCancelLocate").onclick = async () => {
+        await locateEl.cancelLocate();
+        setStatus("已取消定位");
+    };
+
+    // ===== Print 可用性检测 =====
+    document.getElementById("btnCheckPrint").onclick = () => {
+        if (view.type === "3d") {
+            setStatus("当前为 3D 场景（SceneView）：Print 组件不支持，请使用「截图导出 PNG」");
+        } else {
+            setStatus("当前为 2D 地图（MapView）：可以使用 Print 组件");
+        }
+    };
+
+    // ===== 三维导出：takeScreenshot 替代 Print =====
+    document.getElementById("btnExport").onclick = async () => {
+        try {
+            const { dataUrl } = await view.takeScreenshot({ format: "png", width: 1920, height: 1080 });
+            const a = document.createElement("a");
+            a.href = dataUrl;
+            a.download = "scene.png";
+            a.click();
+            setStatus("已导出 PNG（1920×1080）,三维场景导出图片的标准做法");
+        } catch (err) {
+            setStatus("导出失败：" + err.message);
+        }
+    };
+
+    setStatus("场景组件2 就绪 | 左上角为 Zoom / Home / Locate");
+</script>
+</body>
+</html>
