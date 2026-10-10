@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>第48课：SceneView watch 状态监听</title>
+    <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css">
+    <script type="module" src="https://js.arcgis.com/5.0/"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: "Microsoft YaHei", sans-serif; }
+        #mapContainer { width: 100vw; height: 100vh; }
+        .page-title {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(255,255,255,0.95); padding: 10px 24px; border-radius: 6px;
+            font-size: 18px; font-weight: bold; z-index: 100;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .panel {
+            position: absolute; top: 80px; right: 20px; width: 300px;
+            background: rgba(255,255,255,0.95); padding: 16px; border-radius: 8px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15); z-index: 100;
+        }
+        .panel h3 { margin: 0 0 8px 0; font-size: 14px; }
+        .info-row {
+            display: flex; justify-content: space-between;
+            font-size: 12px; padding: 4px 0; border-bottom: 1px dashed #eee;
+        }
+        .info-row span:last-child { color: #1890ff; font-weight: bold; }
+        .btn-row { display: flex; gap: 8px; margin-top: 8px; }
+        .btn-row button {
+            flex: 1; padding: 6px 0; font-size: 12px;
+            border: 1px solid #d9d9d9; border-radius: 4px;
+            background: white; cursor: pointer;
+        }
+        .btn-row button:hover { border-color: #1890ff; color: #1890ff; }
+        .btn-row button.active { background: #1890ff; color: white; border-color: #1890ff; }
+        .status {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.7); color: white; padding: 8px 20px;
+            border-radius: 20px; font-size: 13px; z-index: 100; pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+<h1 class="page-title">第48课：SceneView watch 状态监听</h1>
+
+<div class="panel">
+    <h3>📡 实时状态</h3>
+    <div class="info-row"><span>经度</span><span id="vLng">--</span></div>
+    <div class="info-row"><span>纬度</span><span id="vLat">--</span></div>
+    <div class="info-row"><span>相机高度</span><span id="vZ">--</span></div>
+    <div class="info-row"><span>方位角 heading</span><span id="vHeading">--</span></div>
+    <div class="info-row"><span>倾斜角 tilt</span><span id="vTilt">--</span></div>
+    <div class="info-row"><span>比例尺 1:</span><span id="vScale">--</span></div>
+    <div class="info-row"><span>静止 stationary</span><span id="vStationary">--</span></div>
+    <div class="info-row"><span>回调次数</span><span id="vCount">0</span></div>
+
+    <h3 style="margin-top: 12px;">① 传统 view.watch()</h3>
+    <div class="btn-row">
+        <button id="btnLegacyStart">启动监听</button>
+        <button id="btnLegacyStop">停止监听</button>
+    </div>
+
+    <h3 style="margin-top: 12px;">② reactiveUtils.watch()</h3>
+    <div class="btn-row">
+        <button id="btnRuStart">启动监听</button>
+        <button id="btnRuStop">停止监听</button>
+    </div>
+
+    <h3 style="margin-top: 12px;">③ when / whenOnce</h3>
+    <div class="btn-row">
+        <button id="btnWhen">when 静止后提示</button>
+        <button id="btnWhenOnce">whenOnce 等待静止</button>
+    </div>
+
+    <h3 style="margin-top: 12px;">④ 触发视图变化</h3>
+    <div class="btn-row">
+        <button id="btnShanghai">飞到上海</button>
+        <button id="btnBeijing">飞回北京</button>
+    </div>
+</div>
+
+<div class="status" id="st">SceneView watch | 先启动监听，再拖动/旋转地图观察状态变化</div>
+<div id="mapContainer"></div>
+
+<script type="module">
+    const Map = await $arcgis.import("@arcgis/core/Map.js");
+    const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
+    const GraphicsLayer = await $arcgis.import("@arcgis/core/layers/GraphicsLayer.js");
+    const Graphic = await $arcgis.import("@arcgis/core/Graphic.js");
+    const Point = await $arcgis.import("@arcgis/core/geometry/Point.js");
+    const ElevationLayer = await $arcgis.import("@arcgis/core/layers/ElevationLayer.js");
+    const reactiveUtils = await $arcgis.import("@arcgis/core/core/reactiveUtils.js");
+    const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
+
+    const tl = getTianditu.default({ type: "vec_w" });
+    const map = new Map({
+        basemap: { baseLayers: [tl.base, tl.anno] },
+        ground: {
+            surface: {
+                elevationLayers: [new ElevationLayer({
+                    url: "https://www.geosceneonline.cn/image/rest/services/OpenData/ChinaTerrain3D/ImageServer/"
+                })]
+            }
+        }
+    });
+
+    const view = new SceneView({
+        container: "mapContainer",
+        map: map,
+        camera: { position: { longitude: 116.397, latitude: 39.908, z: 1500 }, heading: 0, tilt: 60 }
+    });
+
+    // 少量参照点，便于观察视图变化时坐标的联动
+    const gl = new GraphicsLayer({ title: "参照点", elevationInfo: { mode: "relative-to-ground" } });
+    [[116.397, 39.908, "北京"], [121.473, 31.230, "上海"]].forEach(([lng, lat, name]) => {
+        gl.add(new Graphic({
+            geometry: new Point({ longitude: lng, latitude: lat, z: 200 }),
+            symbol: {
+                type: "point-3d",
+                symbolLayers: [{ type: "object", resource: { primitive: "sphere" }, width: 120, height: 120, depth: 120, material: { color: [255, 80, 80] } }]
+            },
+            attributes: { NAME: name }
+        }));
+    });
+    map.add(gl);
+
+    await view.when();
+
+    // ===== 面板刷新 =====
+    let callbackCount = 0;
+    function setStatus(msg) { document.getElementById("st").textContent = msg; }
+
+    function updatePanel() {
+        const cam = view.camera;
+        if (!cam) return;
+        callbackCount++;
+        document.getElementById("vLng").textContent = cam.position.longitude.toFixed(5);
+        document.getElementById("vLat").textContent = cam.position.latitude.toFixed(5);
+        document.getElementById("vZ").textContent = cam.position.z.toFixed(0) + " m";
+        document.getElementById("vHeading").textContent = cam.heading.toFixed(1) + "°";
+        document.getElementById("vTilt").textContent = cam.tilt.toFixed(1) + "°";
+        document.getElementById("vScale").textContent = Math.round(view.scale).toLocaleString();
+        document.getElementById("vStationary").textContent = view.stationary ? "是" : "运动中";
+        document.getElementById("vCount").textContent = callbackCount;
+    }
+
+    // ===== ① 传统 watch：每个属性一个句柄 =====
+    const legacyHandles = [];
+    function startLegacy() {
+        if (legacyHandles.length) { setStatus("传统监听已在运行"); return; }
+        legacyHandles.push(view.watch("camera", updatePanel));
+        legacyHandles.push(view.watch("scale", updatePanel));
+        legacyHandles.push(view.watch("stationary", updatePanel));
+        document.getElementById("btnLegacyStart").classList.add("active");
+        setStatus("传统 watch 已启动：camera / scale / stationary 共 3 个句柄");
+    }
+    function stopLegacy() {
+        legacyHandles.forEach(h => h.remove());
+        legacyHandles.length = 0;
+        document.getElementById("btnLegacyStart").classList.remove("active");
+        setStatus("传统 watch 已停止，句柄已释放");
+    }
+
+    // ===== ② reactiveUtils：一个句柄跟踪多个属性 =====
+    let ruHandle = null;
+    function startReactive() {
+        if (ruHandle) { setStatus("reactiveUtils 监听已在运行"); return; }
+        ruHandle = reactiveUtils.watch(
+            () => [view.camera?.heading, view.camera?.tilt, view.scale, view.stationary],
+            () => updatePanel(),
+            { initial: true }
+        );
+        document.getElementById("btnRuStart").classList.add("active");
+        setStatus("reactiveUtils.watch 已启动：1 个句柄跟踪 4 个属性（initial:true 立即回调一次）");
+    }
+    function stopReactive() {
+        if (!ruHandle) { setStatus("reactiveUtils 监听未启动"); return; }
+        ruHandle.remove();
+        ruHandle = null;
+        document.getElementById("btnRuStart").classList.remove("active");
+        setStatus("reactiveUtils 句柄已 remove()，监听解除");
+    }
+
+    // ===== ③ when / whenOnce =====
+    function runWhen() {
+        // once:true → 触发一次后自动移除句柄，适合「停下来再做一次」的场景
+        reactiveUtils.when(
+            () => view.stationary === true,
+            () => setStatus("when：视图已静止，执行一次（句柄自动释放）"),
+            { once: true }
+        );
+        setStatus("when 已注册：请在地图中拖动/旋转，松手后触发一次");
+    }
+    async function runWhenOnce() {
+        setStatus("whenOnce：等待视图静止（Promise）...");
+        await reactiveUtils.whenOnce(() => view.stationary === true);
+        setStatus("whenOnce：Promise 已 resolve，视图静止");
+    }
+
+    // ===== ④ 触发视图变化 =====
+    function flyTo(lng, lat, name) {
+        view.goTo({ position: { longitude: lng, latitude: lat, z: 1500 }, heading: 0, tilt: 60 }, { duration: 2000 })
+            .catch(() => {});
+        setStatus("正在飞往" + name + "，观察面板数值联动更新");
+    }
+
+    document.getElementById("btnLegacyStart").onclick = startLegacy;
+    document.getElementById("btnLegacyStop").onclick = stopLegacy;
+    document.getElementById("btnRuStart").onclick = startReactive;
+    document.getElementById("btnRuStop").onclick = stopReactive;
+    document.getElementById("btnWhen").onclick = runWhen;
+    document.getElementById("btnWhenOnce").onclick = runWhenOnce;
+    document.getElementById("btnShanghai").onclick = () => flyTo(121.473, 31.230, "上海");
+    document.getElementById("btnBeijing").onclick = () => flyTo(116.397, 39.908, "北京");
+
+    updatePanel();
+    setStatus("场景就绪 | 启动监听后拖动或旋转地图，观察状态实时联动");
+</script>
+</body>
+</html>
