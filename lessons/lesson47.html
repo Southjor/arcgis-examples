@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>第47课：内置组件集成</title>
+    <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css">
+    <script type="module" src="https://js.arcgis.com/5.0/"></script>
+    <style>
+        html, body { margin: 0; height: 100%; font-family: "Microsoft YaHei", sans-serif; }
+        #viewDiv { width: 100%; height: 100vh; }
+        .page-title {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(255,255,255,0.95); padding: 10px 24px; border-radius: 6px;
+            font-size: 18px; font-weight: bold; z-index: 200;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15); pointer-events: none;
+        }
+        .status-text {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.7); color: white; padding: 8px 20px;
+            border-radius: 20px; font-size: 13px; z-index: 200; pointer-events: none;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+<h1 class="page-title">第47课：内置组件集成</h1>
+
+<!-- 使用 arcgis-scene 组件作为容器，内置组件作为子元素通过 slot 自动绑定视图 -->
+<arcgis-scene id="viewDiv"
+        camera-position="121.498, 31.205, 4000"
+        camera-tilt="60"
+        camera-heading="20">
+
+    <!-- 左上角：缩放 / 导航切换 / 指北针 / 主页 -->
+    <arcgis-zoom slot="top-left"></arcgis-zoom>
+    <arcgis-navigation-toggle slot="top-left"></arcgis-navigation-toggle>
+    <arcgis-compass slot="top-left"></arcgis-compass>
+    <arcgis-home slot="top-left"></arcgis-home>
+
+    <!-- 右上角：图层列表 / 全屏 -->
+    <arcgis-layer-list slot="top-right"></arcgis-layer-list>
+    <arcgis-fullscreen slot="top-right"></arcgis-fullscreen>
+
+    <!-- 右下角：图例 / 坐标转换 -->
+    <arcgis-legend slot="bottom-right"></arcgis-legend>
+    <arcgis-coordinate-conversion slot="bottom-right"></arcgis-coordinate-conversion>
+
+    <!-- 左下角：比例尺 / 日照 -->
+    <arcgis-scale-bar slot="bottom-left"></arcgis-scale-bar>
+    <arcgis-daylight slot="bottom-left"></arcgis-daylight>
+
+</arcgis-scene>
+
+<div class="status-text" id="statusText">内置组件集成 | 多组件协同的 3D 场景</div>
+
+<script type="module">
+    const [Map, SceneView, FeatureLayer, GraphicsLayer, Graphic] = await $arcgis.import([
+        "@arcgis/core/Map.js",
+        "@arcgis/core/views/SceneView.js",
+        "@arcgis/core/layers/FeatureLayer.js",
+        "@arcgis/core/layers/GraphicsLayer.js",
+        "@arcgis/core/Graphic.js"
+    ]);
+    const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
+
+    const vecLayers = getTianditu.default({ type: "vec_w" });
+    const map = new Map({ basemap: { baseLayers: [vecLayers.base, vecLayers.anno] } });
+
+    // 监测点图层（唯一值渲染，供 Legend 展示）
+    const monitorLayer = (() => {
+        const cats = ["A类", "B类", "C类"];
+        const colors = {
+            "A类": [227, 74, 51],
+            "B类": [56, 135, 220],
+            "C类": [60, 180, 110]
+        };
+        const graphics = [];
+        for (let i = 0; i < 90; i++) {
+            graphics.push(new Graphic({
+                geometry: {
+                    type: "point",
+                    x: 121.46 + Math.random() * 0.08,
+                    y: 31.18 + Math.random() * 0.06,
+                    z: 80 + Math.random() * 400,
+                    spatialReference: { wkid: 4326 }
+                },
+                attributes: {
+                    OBJECTID: i + 1,
+                    NAME: "监测点" + (i + 1),
+                    CATEGORY: cats[i % 3]
+                }
+            }));
+        }
+        return new FeatureLayer({
+            source: graphics,
+            objectIdField: "OBJECTID",
+            fields: [
+                { name: "OBJECTID", type: "oid" },
+                { name: "NAME", type: "string" },
+                { name: "CATEGORY", type: "string" }
+            ],
+            geometryType: "point",
+            spatialReference: { wkid: 4326 },
+            title: "实时监测点",
+            elevationInfo: { mode: "relative-to-ground" },
+            renderer: {
+                type: "unique-value",
+                field: "CATEGORY",
+                uniqueValueInfos: cats.map(cat => ({
+                    value: cat,
+                    symbol: {
+                        type: "point-3d",
+                        symbolLayers: [{
+                            type: "object",
+                            resource: { primitive: "sphere" },
+                            width: 220, height: 220, depth: 220,
+                            material: { color: colors[cat] }
+                        }]
+                    }
+                }))
+            }
+        });
+    })();
+
+    const buildingLayer = (() => {
+        const layer = new GraphicsLayer({ title: "重点建筑体" });
+        const bases = [
+            { x: 121.490, y: 31.230, h: 900, c: [120, 170, 230] },
+            { x: 121.495, y: 31.225, h: 1400, c: [230, 160, 70] },
+            { x: 121.500, y: 31.220, h: 700, c: [120, 200, 160] },
+            { x: 121.485, y: 31.218, h: 1100, c: [200, 120, 200] }
+        ];
+        bases.forEach((b, idx) => {
+            layer.add(new Graphic({
+                geometry: { type: "point", x: b.x, y: b.y, z: 0, spatialReference: { wkid: 4326 } },
+                symbol: {
+                    type: "point-3d",
+                    symbolLayers: [{
+                        type: "object",
+                        resource: { primitive: "cube" },
+                        width: 350, depth: 350, height: b.h,
+                        material: { color: b.c }
+                    }]
+                },
+                attributes: { NAME: "建筑" + (idx + 1) }
+            }));
+        });
+        return layer;
+    })();
+
+    map.addMany([buildingLayer, monitorLayer]);
+
+    // ===== arcgis-scene 组件：绑定 map 并等待就绪 =====
+    const viewElement = document.querySelector("arcgis-scene");
+    const view = viewElement.view;
+    view.map = map;
+
+    await viewElement.viewOnReady();
+    // 默认定位：自动框选全部数据范围，确保初始视角合适
+    await monitorLayer.when();
+    // goTo 的目标只能是几何/Graphic/Viewpoint/Camera 等，图层需用其 fullExtent
+    view.goTo([monitorLayer.fullExtent, buildingLayer.fullExtent], { duration: 1500 }).catch(() => {});
+    setStatus("内置组件集成就绪 | 尝试左上/右上/左下/右下的各类组件");
+
+    function setStatus(msg) { document.getElementById("statusText").textContent = msg; }
+</script>
+</body>
+</html>
