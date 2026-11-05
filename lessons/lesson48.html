@@ -201,8 +201,12 @@
 
     // ===== ④ 触发视图变化 =====
     function flyTo(lng, lat, name) {
-        view.goTo({ position: { longitude: lng, latitude: lat, z: 1500 }, heading: 0, tilt: 60 }, { duration: 2000 })
-            .catch(() => {});
+        view.goTo({
+            position: new Point({ longitude: lng, latitude: lat, z: 1500 }),
+            heading: 0,
+            tilt: 60
+        }, { duration: 2000 })
+            .catch((e) => console.warn("goTo 失败:", e?.message));
         setStatus("正在飞往" + name + "，观察面板数值联动更新");
     }
 
