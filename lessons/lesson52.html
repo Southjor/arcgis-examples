@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>第52课：Symbol 专题 - 线符号 SimpleLineSymbol</title>
+    <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css">
+    <script type="module" src="https://js.arcgis.com/5.0/"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: "Microsoft YaHei", sans-serif; }
+        #mapContainer { width: 100vw; height: 100vh; }
+        .page-title {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(255,255,255,0.95); padding: 10px 24px; border-radius: 6px;
+            font-size: 18px; font-weight: bold; z-index: 100;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .panel {
+            position: absolute; top: 80px; right: 20px; width: 300px;
+            background: rgba(255,255,255,0.95); padding: 16px; border-radius: 8px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15); z-index: 100;
+        }
+        .panel h3 { margin: 0 0 10px 0; font-size: 14px; }
+        .form-group { margin-bottom: 8px; }
+        .form-group label { display: block; font-size: 12px; margin-bottom: 4px; color: #555; }
+        .form-group select,
+        .form-group input[type="range"] { width: 100%; }
+        .form-group input[type="color"] { width: 100%; height: 28px; border: 1px solid #d9d9d9; }
+        .val { float: right; color: #1890ff; font-weight: bold; }
+        .btn-row { display: flex; gap: 8px; margin-top: 10px; }
+        .btn-row button {
+            flex: 1; padding: 6px 0; font-size: 12px;
+            border: 1px solid #d9d9d9; border-radius: 4px;
+            background: white; cursor: pointer;
+        }
+        .btn-row button:hover { border-color: #1890ff; color: #1890ff; }
+        .tip {
+            margin-top: 10px; padding: 8px; font-size: 11px; line-height: 1.6;
+            background: #fff7e6; border-left: 3px solid #faad14; border-radius: 3px; color: #614700;
+        }
+        .status {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.7); color: white; padding: 8px 20px;
+            border-radius: 20px; font-size: 13px; z-index: 100; pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+<h1 class="page-title">第52课：Symbol 专题 - 线符号 SimpleLineSymbol</h1>
+
+<div class="panel">
+    <h3>📏 线符号参数</h3>
+
+    <div class="form-group">
+        <label>线型 style</label>
+        <select id="selStyle">
+            <option value="solid">solid 实线</option>
+            <option value="dash">dash 虚线</option>
+            <option value="dash-dot">dash-dot 点划线</option>
+            <option value="dot">dot 点线</option>
+            <option value="long-dash">long-dash 长虚线</option>
+            <option value="long-dash-dot">long-dash-dot</option>
+            <option value="long-dash-dot-dot">long-dash-dot-dot</option>
+            <option value="short-dash">short-dash 短虚线</option>
+            <option value="short-dash-dot">short-dash-dot</option>
+            <option value="short-dash-dot-dot">short-dash-dot-dot</option>
+            <option value="short-dot">short-dot 短点线</option>
+            <option value="none">none 不显示</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label>线宽 width<span class="val" id="vWidth">3</span></label>
+        <input type="range" id="rngWidth" min="0.5" max="12" step="0.5" value="3">
+    </div>
+
+    <div class="form-group">
+        <label>颜色 color</label>
+        <input type="color" id="clrColor" value="#f5a623">
+    </div>
+
+    <div class="form-group">
+        <label>端点 cap</label>
+        <select id="selCap">
+            <option value="round">round</option>
+            <option value="butt">butt</option>
+            <option value="square">square</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label>折点 join</label>
+        <select id="selJoin">
+            <option value="round">round</option>
+            <option value="bevel">bevel</option>
+            <option value="miter">miter</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label>高度模式 elevationInfo</label>
+        <select id="selElev">
+            <option value="on-the-ground">on-the-ground 贴地</option>
+            <option value="relative-to-ground">relative-to-ground 离地</option>
+            <option value="absolute-height">absolute-height 绝对高程</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label>3D 端点标记 marker（仅 LineSymbol3D 生效）</label>
+        <select id="selMarker">
+            <option value="none">无端点标记</option>
+            <option value="arrow">arrow 箭头</option>
+            <option value="circle">circle 圆点</option>
+            <option value="x">x 叉号</option>
+        </select>
+    </div>
+
+    <div class="btn-row">
+        <button id="btnToggle3D">切换为 LineSymbol3D</button>
+    </div>
+
+    <div class="tip">
+        ⚠️ 三维限制：2D 的 <code>SimpleLineSymbol.marker</code> 与 <code>miterLimit</code>
+        在 3D SceneView 中<b>不支持</b>；三维端点标记请切到 LineSymbol3D 后用
+        <b>LineStyleMarker3D</b>（上方 marker 下拉，仅 3D 生效）。
+    </div>
+</div>
+
+<div class="status" id="st">线符号 | 调整参数观察三维场景中的变化</div>
+<div id="mapContainer"></div>
+
+<script type="module">
+    const Map = await $arcgis.import("@arcgis/core/Map.js");
+    const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
+    const GraphicsLayer = await $arcgis.import("@arcgis/core/layers/GraphicsLayer.js");
+    const Graphic = await $arcgis.import("@arcgis/core/Graphic.js");
+    const Polyline = await $arcgis.import("@arcgis/core/geometry/Polyline.js");
+    const SimpleLineSymbol = await $arcgis.import("@arcgis/core/symbols/SimpleLineSymbol.js");
+    const ElevationLayer = await $arcgis.import("@arcgis/core/layers/ElevationLayer.js");
+    const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
+
+    const tl = getTianditu.default({ type: "vec_w" });
+    const map = new Map({
+        basemap: { baseLayers: [tl.base, tl.anno] },
+        ground: {
+            surface: {
+                elevationLayers: [new ElevationLayer({
+                    url: "https://www.geosceneonline.cn/image/rest/services/OpenData/ChinaTerrain3D/ImageServer/"
+                })]
+            }
+        }
+    });
+
+    const view = new SceneView({
+        container: "mapContainer",
+        map: map,
+        camera: { position: { longitude: 121.473, latitude: 31.230, z: 1100 }, heading: 20, tilt: 60 }
+    });
+
+    const gl = new GraphicsLayer({ title: "管线", elevationInfo: { mode: "on-the-ground" } });
+    map.add(gl);
+
+    // 三条不同走向的管线（z 用于 relative-to-ground / absolute-height 模式）
+    const lines = [
+        {
+            name: "主管线",
+            paths: [[[121.4620, 31.2380, 60], [121.4700, 31.2340, 90], [121.4780, 31.2360, 60], [121.4860, 31.2280, 120]]]
+        },
+        {
+            name: "支线A",
+            paths: [[[121.4660, 31.2420, 40], [121.4720, 31.2380, 60], [121.4800, 31.2400, 40]]]
+        },
+        {
+            name: "支线B",
+            paths: [[[121.4720, 31.2280, 80], [121.4780, 31.2220, 100], [121.4880, 31.2240, 80]]]
+        }
+    ];
+
+    const cfg = {
+        style: "solid", width: 3, color: "#f5a623",
+        cap: "round", join: "round", mode: "on-the-ground",
+        marker: "none", use3D: false
+    };
+
+    function buildSymbol() {
+        if (cfg.use3D) {
+            // 三维扁平线图层（LineSymbol3DLayer），marker 为 LineStyleMarker3D（4.23+）
+            const layer = {
+                type: "line",
+                size: cfg.width,
+                material: { color: cfg.color },
+                cap: cfg.cap,
+                join: cfg.join
+            };
+            if (cfg.marker !== "none") {
+                layer.marker = { type: "style", style: cfg.marker, placement: "end" };
+            }
+            return { type: "line-3d", symbolLayers: [layer] };
+        }
+        return new SimpleLineSymbol({
+            style: cfg.style,
+            color: cfg.color,
+            width: cfg.width,
+            cap: cfg.cap,
+            join: cfg.join
+        });
+    }
+
+    function rebuild() {
+        const symbol = buildSymbol();
+        gl.elevationInfo = { mode: cfg.mode };
+        gl.removeAll();
+        lines.forEach((l, i) => {
+            gl.add(new Graphic({
+                geometry: new Polyline({ paths: l.paths, spatialReference: { wkid: 4326 } }),
+                symbol: symbol,
+                attributes: { OBJECTID: i + 1, NAME: l.name }
+            }));
+        });
+        if (!cfg.use3D && cfg.marker !== "none") {
+            setStatus("提示：marker 仅在 LineSymbol3D 上生效，2D 的 SimpleLineSymbol.marker 不支持 3D");
+        } else {
+            setStatus("已更新：" + (cfg.use3D ? "LineSymbol3DLayer（扁平线）" : "SimpleLineSymbol（扁平线）") + " | " + cfg.mode);
+        }
+    }
+
+    function setStatus(msg) { document.getElementById("st").textContent = msg; }
+
+    document.getElementById("selStyle").onchange = (e) => { cfg.style = e.target.value; rebuild(); };
+    document.getElementById("rngWidth").oninput = (e) => {
+        cfg.width = Number(e.target.value);
+        document.getElementById("vWidth").textContent = cfg.width;
+        rebuild();
+    };
+    document.getElementById("clrColor").oninput = (e) => { cfg.color = e.target.value; rebuild(); };
+    document.getElementById("selCap").onchange = (e) => { cfg.cap = e.target.value; rebuild(); };
+    document.getElementById("selJoin").onchange = (e) => { cfg.join = e.target.value; rebuild(); };
+    document.getElementById("selElev").onchange = (e) => { cfg.mode = e.target.value; rebuild(); };
+    document.getElementById("selMarker").onchange = (e) => { cfg.marker = e.target.value; rebuild(); };
+    document.getElementById("btnToggle3D").onclick = (e) => {
+        cfg.use3D = !cfg.use3D;
+        e.target.textContent = cfg.use3D ? "切换为 SimpleLineSymbol" : "切换为 LineSymbol3D";
+        rebuild();
+    };
+
+    await view.when();
+    rebuild();
+    view.goTo(gl.graphics.toArray(), { duration: 1500 }).catch(() => {});
+    setStatus("线符号示例就绪 | 切换高度模式可观察贴地与悬浮的差异");
+</script>
+</body>
+</html>
