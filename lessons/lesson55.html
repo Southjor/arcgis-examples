@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>第55课：Symbol 专题 - 图片符号 PictureMarkerSymbol</title>
+    <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css">
+    <script type="module" src="https://js.arcgis.com/5.0/"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: "Microsoft YaHei", sans-serif; }
+        #mapContainer { width: 100vw; height: 100vh; }
+        .page-title {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(255,255,255,0.95); padding: 10px 24px; border-radius: 6px;
+            font-size: 18px; font-weight: bold; z-index: 100;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .panel {
+            position: absolute; top: 80px; right: 20px; width: 310px;
+            background: rgba(255,255,255,0.95); padding: 16px; border-radius: 8px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15); z-index: 100;
+        }
+        .panel h3 { margin: 0 0 10px 0; font-size: 14px; }
+        .form-group { margin-bottom: 8px; }
+        .form-group label { display: block; font-size: 12px; margin-bottom: 4px; color: #555; }
+        .form-group select,
+        .form-group input[type="text"],
+        .form-group input[type="range"] { width: 100%; }
+        .form-group input[type="text"] { padding: 5px 8px; border: 1px solid #d9d9d9; border-radius: 4px; }
+        .val { float: right; color: #1890ff; font-weight: bold; }
+        .btn-row { display: flex; gap: 8px; margin-top: 10px; }
+        .btn-row button {
+            flex: 1; padding: 6px 0; font-size: 12px;
+            border: 1px solid #d9d9d9; border-radius: 4px;
+            background: white; cursor: pointer;
+        }
+        .btn-row button:hover { border-color: #1890ff; color: #1890ff; }
+        .tip {
+            margin-top: 10px; padding: 8px; font-size: 11px; line-height: 1.6;
+            background: #fff7e6; border-left: 3px solid #faad14; border-radius: 3px; color: #614700;
+        }
+        .status {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.7); color: white; padding: 8px 20px;
+            border-radius: 20px; font-size: 13px; z-index: 100; pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+<h1 class="page-title">第55课：Symbol 专题 - 图片符号 PictureMarkerSymbol</h1>
+
+<div class="panel">
+    <h3>🖼 图片符号参数</h3>
+
+    <div class="form-group">
+        <label>图片来源 url</label>
+        <select id="selPreset">
+            <option value="star">官方星形 PNG</option>
+            <option value="pin">内联 SVG 图钉（免跨域）</option>
+            <option value="custom">自定义 URL</option>
+        </select>
+    </div>
+
+    <div class="form-group" id="grpCustom" style="display: none;">
+        <label>自定义图片地址（需支持 CORS）</label>
+        <input type="text" id="inpUrl" placeholder="https://example.com/icon.png">
+    </div>
+
+    <div class="form-group">
+        <label>宽度 width<span class="val" id="vWidth">32</span></label>
+        <input type="range" id="rngWidth" min="8" max="120" step="2" value="32">
+    </div>
+
+    <div class="form-group">
+        <label>高度 height<span class="val" id="vHeight">32</span></label>
+        <input type="range" id="rngHeight" min="8" max="120" step="2" value="32">
+    </div>
+
+    <div class="form-group">
+        <label>旋转 angle<span class="val" id="vAngle">0</span></label>
+        <input type="range" id="rngAngle" min="0" max="360" step="5" value="0">
+    </div>
+
+    <div class="form-group">
+        <label>悬浮高度 z<span class="val" id="vZ">150</span></label>
+        <input type="range" id="rngZ" min="0" max="500" step="10" value="150">
+    </div>
+
+    <div class="btn-row">
+        <button id="btnTry200">尝试设置 240px</button>
+    </div>
+
+    <div class="tip">
+        ⚠️ 三维限制：动画 GIF / 动画 PNG / 动画 SVG 在 3D SceneView 中<b>不支持</b>；
+        符号尺寸上限 <b>200px</b>（超出自动等比缩小）；
+        SVG 必须在内部定义 <code>width</code>/<code>height</code>（否则 Firefox 加载失败）；
+        图片需支持 <b>CORS</b> 或与应用同域。
+    </div>
+</div>
+
+<div class="status" id="st">图片符号 | 调整参数观察三维场景中的图标标注</div>
+<div id="mapContainer"></div>
+
+<script type="module">
+    const Map = await $arcgis.import("@arcgis/core/Map.js");
+    const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
+    const GraphicsLayer = await $arcgis.import("@arcgis/core/layers/GraphicsLayer.js");
+    const Graphic = await $arcgis.import("@arcgis/core/Graphic.js");
+    const Point = await $arcgis.import("@arcgis/core/geometry/Point.js");
+    const PictureMarkerSymbol = await $arcgis.import("@arcgis/core/symbols/PictureMarkerSymbol.js");
+    const ElevationLayer = await $arcgis.import("@arcgis/core/layers/ElevationLayer.js");
+    const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
+
+    const tl = getTianditu.default({ type: "vec_w" });
+    const map = new Map({
+        basemap: { baseLayers: [tl.base, tl.anno] },
+        ground: {
+            surface: {
+                elevationLayers: [new ElevationLayer({
+                    url: "https://www.geosceneonline.cn/image/rest/services/OpenData/ChinaTerrain3D/ImageServer/"
+                })]
+            }
+        }
+    });
+
+    const view = new SceneView({
+        container: "mapContainer",
+        map: map,
+        camera: { position: { longitude: 116.397, latitude: 39.908, z: 900 }, heading: 0, tilt: 55 }
+    });
+
+    const gl = new GraphicsLayer({ title: "兴趣点", elevationInfo: { mode: "relative-to-ground" } });
+    map.add(gl);
+
+    const pois = [
+        { x: 116.3910, y: 39.9060, name: "景点A" },
+        { x: 116.3970, y: 39.9120, name: "景点B" },
+        { x: 116.4030, y: 39.9040, name: "景点C" },
+        { x: 116.3990, y: 39.9000, name: "景点D" }
+    ];
+
+    // 内联 SVG 图钉：必须包含 width/height 属性（Firefox 兼容），# 需转义为 %23
+    const SVG_PIN = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48">' +
+        '<path d="M24 4 C15 4 8 11 8 20 C8 32 24 46 24 46 C24 46 40 32 40 20 C40 11 33 4 24 4 Z" fill="%23e74a33" stroke="white" stroke-width="2"/>' +
+        '<circle cx="24" cy="19" r="6" fill="white"/>' +
+        '</svg>'
+    );
+
+    const PRESETS = {
+        star: { url: "https://static.arcgis.com/images/Symbols/Shapes/BlackStarLargeB.png", name: "官方星形 PNG" },
+        pin: { url: SVG_PIN, name: "内联 SVG 图钉" }
+    };
+
+    const cfg = { url: PRESETS.star.url, width: 32, height: 32, angle: 0, z: 150 };
+
+    function buildSymbol() {
+        return new PictureMarkerSymbol({
+            url: cfg.url,
+            width: cfg.width,
+            height: cfg.height,
+            angle: cfg.angle
+        });
+    }
+
+    function rebuild() {
+        const symbol = buildSymbol();
+        gl.removeAll();
+        pois.forEach((p, i) => {
+            gl.add(new Graphic({
+                geometry: new Point({ longitude: p.x, latitude: p.y, z: cfg.z, spatialReference: { wkid: 4326 } }),
+                symbol: symbol,
+                attributes: { OBJECTID: i + 1, NAME: p.name }
+            }));
+        });
+        setStatus("已更新：" + cfg.width + "×" + cfg.height + "px，旋转 " + cfg.angle + "°，悬浮 " + cfg.z + "m");
+    }
+
+    function setStatus(msg) { document.getElementById("st").textContent = msg; }
+
+    document.getElementById("selPreset").onchange = (e) => {
+        const v = e.target.value;
+        document.getElementById("grpCustom").style.display = v === "custom" ? "block" : "none";
+        if (v !== "custom") {
+            cfg.url = PRESETS[v].url;
+            rebuild();
+            setStatus("已切换为" + PRESETS[v].name);
+        }
+    };
+    document.getElementById("inpUrl").onchange = (e) => {
+        if (!e.target.value) return;
+        cfg.url = e.target.value.trim();
+        rebuild();
+        setStatus("已加载自定义图片（若未显示请检查 CORS 与图片地址）");
+    };
+    document.getElementById("rngWidth").oninput = (e) => {
+        cfg.width = Number(e.target.value);
+        document.getElementById("vWidth").textContent = cfg.width;
+        rebuild();
+    };
+    document.getElementById("rngHeight").oninput = (e) => {
+        cfg.height = Number(e.target.value);
+        document.getElementById("vHeight").textContent = cfg.height;
+        rebuild();
+    };
+    document.getElementById("rngAngle").oninput = (e) => {
+        cfg.angle = Number(e.target.value);
+        document.getElementById("vAngle").textContent = cfg.angle;
+        rebuild();
+    };
+    document.getElementById("rngZ").oninput = (e) => {
+        cfg.z = Number(e.target.value);
+        document.getElementById("vZ").textContent = cfg.z;
+        rebuild();
+    };
+    document.getElementById("btnTry200").onclick = () => {
+        cfg.width = 240;
+        cfg.height = 240;
+        document.getElementById("rngWidth").value = 120;
+        document.getElementById("rngHeight").value = 120;
+        rebuild();
+        setStatus("width/height 设置为 240px：超出官方 200px 上限，实际按 200px 渲染（自动等比缩小）");
+    };
+
+    await view.when();
+    rebuild();
+    view.goTo(gl.graphics.toArray(), { duration: 1500 }).catch(() => {});
+    setStatus("图片符号示例就绪 | 四个兴趣点悬浮于 " + cfg.z + " 米高度");
+</script>
+</body>
+</html>
