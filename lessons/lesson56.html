@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>第56课：Symbol 专题 - PointSymbol3D 三维点符号</title>
+    <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css">
+    <script type="module" src="https://js.arcgis.com/5.0/"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: "Microsoft YaHei", sans-serif; }
+        #mapContainer { width: 100vw; height: 100vh; }
+        .page-title {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(255,255,255,0.95); padding: 10px 24px; border-radius: 6px;
+            font-size: 18px; font-weight: bold; z-index: 100;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .panel {
+            position: absolute; top: 80px; right: 20px; width: 300px;
+            background: rgba(255,255,255,0.95); padding: 16px; border-radius: 8px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15); z-index: 100;
+        }
+        .panel h3 { margin: 0 0 10px 0; font-size: 14px; }
+        .form-group { margin-bottom: 8px; }
+        .form-group label { display: block; font-size: 12px; margin-bottom: 4px; color: #555; }
+        .form-group select,
+        .form-group input[type="range"] { width: 100%; }
+        .form-group input[type="color"] { width: 100%; height: 28px; border: 1px solid #d9d9d9; }
+        .val { float: right; color: #1890ff; font-weight: bold; }
+        .btn-row { display: flex; gap: 8px; margin-top: 10px; }
+        .btn-row button {
+            flex: 1; padding: 6px 0; font-size: 12px;
+            border: 1px solid #d9d9d9; border-radius: 4px;
+            background: white; cursor: pointer;
+        }
+        .btn-row button:hover { border-color: #1890ff; color: #1890ff; }
+        .tip {
+            margin-top: 10px; padding: 8px; font-size: 11px; line-height: 1.6;
+            background: #e6f7ff; border-left: 3px solid #1890ff; border-radius: 3px; color: #003a8c;
+        }
+        .status {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.7); color: white; padding: 8px 20px;
+            border-radius: 20px; font-size: 13px; z-index: 100; pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+<h1 class="page-title">第56课：Symbol 专题 - PointSymbol3D 三维点符号</h1>
+
+<div class="panel">
+    <h3>🔷 ObjectSymbol3DLayer 参数</h3>
+
+    <div class="form-group">
+        <label>几何体 primitive</label>
+        <select id="selPrimitive">
+            <option value="sphere">sphere 球体（默认，锚点在中心）</option>
+            <option value="cube">cube 立方体（锚点在中心）</option>
+            <option value="diamond">diamond 菱形体（锚点在中心）</option>
+            <option value="cylinder">cylinder 圆柱体（锚点在底部）</option>
+            <option value="cone">cone 圆锥体（锚点在底部）</option>
+            <option value="inverted-cone">inverted-cone 倒圆锥（锚点在底部）</option>
+            <option value="tetrahedron">tetrahedron 四面体（锚点在底部）</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label>宽度 width（米）<span class="val" id="vWidth">120</span></label>
+        <input type="range" id="rngWidth" min="20" max="400" step="10" value="120">
+    </div>
+
+    <div class="form-group">
+        <label>高度 height（米）<span class="val" id="vHeight">120</span></label>
+        <input type="range" id="rngHeight" min="20" max="400" step="10" value="120">
+    </div>
+
+    <div class="form-group">
+        <label>深度 depth（米）<span class="val" id="vDepth">120</span></label>
+        <input type="range" id="rngDepth" min="20" max="400" step="10" value="120">
+    </div>
+
+    <div class="form-group">
+        <label>颜色 material.color</label>
+        <input type="color" id="clrColor" value="#12b76a">
+    </div>
+
+    <div class="form-group">
+        <label>旋转 heading（度）<span class="val" id="vHeading">0</span></label>
+        <input type="range" id="rngHeading" min="0" max="360" step="15" value="0">
+    </div>
+
+    <div class="form-group">
+        <label>锚点 anchor</label>
+        <select id="selAnchor">
+            <option value="origin">origin 默认锚点</option>
+            <option value="bottom">relative + 底部对齐</option>
+            <option value="top">relative + 顶部对齐</option>
+        </select>
+    </div>
+
+    <div class="btn-row">
+        <button id="btnEmissive">切换自发光</button>
+        <button id="btnShadow">切换投影</button>
+    </div>
+
+    <div class="tip">
+        💡 尺寸单位是<b>真实世界米</b>，会随距离透视缩放；
+        任一尺寸留空（undefined）会自动按比例计算。
+        自发光 <code>emissive</code> 让符号在夜间场景中发亮。
+    </div>
+</div>
+
+<div class="status" id="st">PointSymbol3D | 调整参数观察真实三维几何体的变化</div>
+<div id="mapContainer"></div>
+
+<script type="module">
+    const Map = await $arcgis.import("@arcgis/core/Map.js");
+    const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
+    const GraphicsLayer = await $arcgis.import("@arcgis/core/layers/GraphicsLayer.js");
+    const Graphic = await $arcgis.import("@arcgis/core/Graphic.js");
+    const Point = await $arcgis.import("@arcgis/core/geometry/Point.js");
+    const ElevationLayer = await $arcgis.import("@arcgis/core/layers/ElevationLayer.js");
+    const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
+
+    const tl = getTianditu.default({ type: "vec_w" });
+    const map = new Map({
+        basemap: { baseLayers: [tl.base, tl.anno] },
+        ground: {
+            surface: {
+                elevationLayers: [new ElevationLayer({
+                    url: "https://www.geosceneonline.cn/image/rest/services/OpenData/ChinaTerrain3D/ImageServer/"
+                })]
+            }
+        }
+    });
+
+    const view = new SceneView({
+        container: "mapContainer",
+        map: map,
+        camera: { position: { longitude: 116.397, latitude: 39.900, z: 1000 }, heading: 10, tilt: 62 },
+        environment: { lighting: { directShadowsEnabled: true } }
+    });
+
+    const gl = new GraphicsLayer({ title: "监测站点", elevationInfo: { mode: "relative-to-ground" } });
+    map.add(gl);
+
+    // 一排监测站（默认绿色球体）
+    const stations = [
+        { x: 116.3880, y: 39.9060, name: "监测站-1" },
+        { x: 116.3940, y: 39.9080, name: "监测站-2" },
+        { x: 116.4000, y: 39.9050, name: "监测站-3" },
+        { x: 116.4060, y: 39.9080, name: "监测站-4" }
+    ];
+
+    const cfg = {
+        primitive: "sphere", width: 120, height: 120, depth: 120,
+        color: "#12b76a", heading: 0, anchor: "origin",
+        emissive: false, castShadows: true
+    };
+
+    function buildSymbol() {
+        const layer = {
+            type: "object",
+            resource: { primitive: cfg.primitive },
+            width: cfg.width,
+            height: cfg.height,
+            depth: cfg.depth,
+            heading: cfg.heading,
+            castShadows: cfg.castShadows
+        };
+        // 材质：普通颜色或自发光
+        layer.material = cfg.emissive
+            ? { color: cfg.color, emissive: { strength: 1, source: "color" } }
+            : { color: cfg.color };
+        // 锚点
+        if (cfg.anchor === "bottom") {
+            layer.anchor = "relative";
+            layer.anchorPosition = { x: 0, y: 0, z: -0.5 };
+        } else if (cfg.anchor === "top") {
+            layer.anchor = "relative";
+            layer.anchorPosition = { x: 0, y: 0, z: 0.5 };
+        } else {
+            layer.anchor = "origin";
+        }
+        return { type: "point-3d", symbolLayers: [layer] };
+    }
+
+    function rebuild() {
+        const symbol = buildSymbol();
+        gl.removeAll();
+        stations.forEach((s, i) => {
+            gl.add(new Graphic({
+                geometry: new Point({ longitude: s.x, latitude: s.y, z: 30, spatialReference: { wkid: 4326 } }),
+                symbol: symbol,
+                attributes: { OBJECTID: i + 1, NAME: s.name }
+            }));
+        });
+        setStatus("已更新：" + cfg.primitive + " | " + cfg.width + "×" + cfg.height + "×" + cfg.depth + " 米");
+    }
+
+    function setStatus(msg) { document.getElementById("st").textContent = msg; }
+
+    document.getElementById("selPrimitive").onchange = (e) => { cfg.primitive = e.target.value; rebuild(); };
+    document.getElementById("rngWidth").oninput = (e) => {
+        cfg.width = Number(e.target.value);
+        document.getElementById("vWidth").textContent = cfg.width;
+        rebuild();
+    };
+    document.getElementById("rngHeight").oninput = (e) => {
+        cfg.height = Number(e.target.value);
+        document.getElementById("vHeight").textContent = cfg.height;
+        rebuild();
+    };
+    document.getElementById("rngDepth").oninput = (e) => {
+        cfg.depth = Number(e.target.value);
+        document.getElementById("vDepth").textContent = cfg.depth;
+        rebuild();
+    };
+    document.getElementById("clrColor").oninput = (e) => { cfg.color = e.target.value; rebuild(); };
+    document.getElementById("rngHeading").oninput = (e) => {
+        cfg.heading = Number(e.target.value);
+        document.getElementById("vHeading").textContent = cfg.heading;
+        rebuild();
+    };
+    document.getElementById("selAnchor").onchange = (e) => { cfg.anchor = e.target.value; rebuild(); };
+    document.getElementById("btnEmissive").onclick = (e) => {
+        cfg.emissive = !cfg.emissive;
+        e.target.textContent = cfg.emissive ? "关闭自发光" : "开启自发光";
+        rebuild();
+    };
+    document.getElementById("btnShadow").onclick = (e) => {
+        cfg.castShadows = !cfg.castShadows;
+        e.target.textContent = cfg.castShadows ? "关闭投影" : "开启投影";
+        rebuild();
+    };
+
+    await view.when();
+    rebuild();
+    view.goTo(gl.graphics.toArray(), { duration: 1500 }).catch(() => {});
+    setStatus("PointSymbol3D 示例就绪 | 切换几何体观察真实体积与光照");
+</script>
+</body>
+</html>
