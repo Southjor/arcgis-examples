@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>第57课：Symbol 专题 - IconSymbol3D 图标符号</title>
+    <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css">
+    <script type="module" src="https://js.arcgis.com/5.0/"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: "Microsoft YaHei", sans-serif; }
+        #mapContainer { width: 100vw; height: 100vh; }
+        .page-title {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(255,255,255,0.95); padding: 10px 24px; border-radius: 6px;
+            font-size: 18px; font-weight: bold; z-index: 100;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .panel {
+            position: absolute; top: 80px; right: 20px; width: 300px;
+            background: rgba(255,255,255,0.95); padding: 16px; border-radius: 8px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15); z-index: 100;
+        }
+        .panel h3 { margin: 0 0 10px 0; font-size: 14px; }
+        .form-group { margin-bottom: 8px; }
+        .form-group label { display: block; font-size: 12px; margin-bottom: 4px; color: #555; }
+        .form-group select,
+        .form-group input[type="range"] { width: 100%; }
+        .form-group input[type="color"] { width: 100%; height: 28px; border: 1px solid #d9d9d9; }
+        .val { float: right; color: #1890ff; font-weight: bold; }
+        .btn-row { display: flex; gap: 8px; margin-top: 10px; }
+        .btn-row button {
+            flex: 1; padding: 6px 0; font-size: 12px;
+            border: 1px solid #d9d9d9; border-radius: 4px;
+            background: white; cursor: pointer;
+        }
+        .btn-row button:hover { border-color: #1890ff; color: #1890ff; }
+        .tip {
+            margin-top: 10px; padding: 8px; font-size: 11px; line-height: 1.6;
+            background: #e6f7ff; border-left: 3px solid #1890ff; border-radius: 3px; color: #003a8c;
+        }
+        .status {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.7); color: white; padding: 8px 20px;
+            border-radius: 20px; font-size: 13px; z-index: 100; pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+<h1 class="page-title">第57课：Symbol 专题 - IconSymbol3D 图标符号</h1>
+
+<div class="panel">
+    <h3>🏷 IconSymbol3DLayer 参数</h3>
+
+    <div class="form-group">
+        <label>图标来源 resource</label>
+        <select id="selResource">
+            <option value="circle">primitive: circle 圆形</option>
+            <option value="triangle">primitive: triangle 三角</option>
+            <option value="cross">primitive: cross 十字</option>
+            <option value="x">primitive: x 叉号</option>
+            <option value="href">href: 官方星形 PNG</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label>大小 size<span class="val" id="vSize">20</span></label>
+        <input type="range" id="rngSize" min="8" max="60" step="2" value="20">
+    </div>
+
+    <div class="form-group">
+        <label>着色 material.color</label>
+        <input type="color" id="clrColor" value="#1890ff">
+    </div>
+
+    <div class="form-group">
+        <label>轮廓 outline.size<span class="val" id="vOutline">1</span></label>
+        <input type="range" id="rngOutline" min="0" max="4" step="0.5" value="1">
+    </div>
+
+    <div class="form-group">
+        <label>锚点 anchor</label>
+        <select id="selAnchor">
+            <option value="center">center 居中（默认）</option>
+            <option value="bottom">bottom 底部（图钉效果）</option>
+            <option value="top">top 顶部（悬挂效果）</option>
+            <option value="left">left 左侧</option>
+            <option value="right">right 右侧</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label>旋转 angle（度）<span class="val" id="vAngle">0</span></label>
+        <input type="range" id="rngAngle" min="0" max="360" step="15" value="0">
+    </div>
+
+    <div class="btn-row">
+        <button id="btnMode">切换 贴地/Billboard</button>
+    </div>
+
+    <div class="tip">
+        💡 图标大小统一由 <code>size</code> 控制（无 width/height 属性）；
+        <code>href</code> 与 <code>primitive</code> 同时存在时 <b>href 优先</b>。
+        贴地模式随地图旋转（draped），悬浮模式始终朝向相机（billboard）。
+    </div>
+</div>
+
+<div class="status" id="st">IconSymbol3D | 调整参数观察图标标注效果</div>
+<div id="mapContainer"></div>
+
+<script type="module">
+    const Map = await $arcgis.import("@arcgis/core/Map.js");
+    const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
+    const GraphicsLayer = await $arcgis.import("@arcgis/core/layers/GraphicsLayer.js");
+    const Graphic = await $arcgis.import("@arcgis/core/Graphic.js");
+    const Point = await $arcgis.import("@arcgis/core/geometry/Point.js");
+    const ElevationLayer = await $arcgis.import("@arcgis/core/layers/ElevationLayer.js");
+    const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
+
+    const tl = getTianditu.default({ type: "vec_w" });
+    const map = new Map({
+        basemap: { baseLayers: [tl.base, tl.anno] },
+        ground: {
+            surface: {
+                elevationLayers: [new ElevationLayer({
+                    url: "https://www.geosceneonline.cn/image/rest/services/OpenData/ChinaTerrain3D/ImageServer/"
+                })]
+            }
+        }
+    });
+
+    const view = new SceneView({
+        container: "mapContainer",
+        map: map,
+        camera: { position: { longitude: 116.397, latitude: 39.900, z: 900 }, heading: 0, tilt: 60 }
+    });
+
+    // 初始贴地（draped）：旋转场景时图标跟着地图转
+    const gl = new GraphicsLayer({ title: "兴趣点", elevationInfo: { mode: "on-the-ground" } });
+    map.add(gl);
+
+    const pois = [
+        { x: 116.3880, y: 39.9060, name: "商铺A" },
+        { x: 116.3940, y: 39.9100, name: "商铺B" },
+        { x: 116.4010, y: 39.9040, name: "景点C" },
+        { x: 116.4060, y: 39.9090, name: "危险源D" }
+    ];
+
+    const cfg = {
+        resource: "circle", size: 20, color: "#1890ff",
+        outline: 1, anchor: "center", angle: 0, mode: "on-the-ground"
+    };
+
+    const HREF_STAR = "https://static.arcgis.com/images/Symbols/Shapes/BlackStarLargeB.png";
+
+    function buildSymbol() {
+        const resource = cfg.resource === "href"
+            ? { href: HREF_STAR }
+            : { primitive: cfg.resource };
+        return {
+            type: "point-3d",
+            symbolLayers: [{
+                type: "icon",
+                resource: resource,
+                size: cfg.size,
+                material: { color: cfg.color },
+                outline: { color: "#ffffff", size: cfg.outline + "px" },
+                anchor: cfg.anchor,
+                angle: cfg.angle
+            }]
+        };
+    }
+
+    function rebuild() {
+        const symbol = buildSymbol();
+        gl.elevationInfo = { mode: cfg.mode };
+        gl.removeAll();
+        pois.forEach((p, i) => {
+            gl.add(new Graphic({
+                geometry: new Point({ longitude: p.x, latitude: p.y, z: 20, spatialReference: { wkid: 4326 } }),
+                symbol: symbol,
+                attributes: { OBJECTID: i + 1, NAME: p.name }
+            }));
+        });
+        const modeText = cfg.mode === "on-the-ground" ? "贴地 draped" : "悬浮 billboard";
+        setStatus("已更新 | 模式：" + modeText + " | size=" + cfg.size + "px");
+    }
+
+    function setStatus(msg) { document.getElementById("st").textContent = msg; }
+
+    document.getElementById("selResource").onchange = (e) => { cfg.resource = e.target.value; rebuild(); };
+    document.getElementById("rngSize").oninput = (e) => {
+        cfg.size = Number(e.target.value);
+        document.getElementById("vSize").textContent = cfg.size;
+        rebuild();
+    };
+    document.getElementById("clrColor").oninput = (e) => { cfg.color = e.target.value; rebuild(); };
+    document.getElementById("rngOutline").oninput = (e) => {
+        cfg.outline = Number(e.target.value);
+        document.getElementById("vOutline").textContent = cfg.outline;
+        rebuild();
+    };
+    document.getElementById("selAnchor").onchange = (e) => { cfg.anchor = e.target.value; rebuild(); };
+    document.getElementById("rngAngle").oninput = (e) => {
+        cfg.angle = Number(e.target.value);
+        document.getElementById("vAngle").textContent = cfg.angle;
+        rebuild();
+    };
+    document.getElementById("btnMode").onclick = (e) => {
+        cfg.mode = cfg.mode === "on-the-ground" ? "relative-to-ground" : "on-the-ground";
+        e.target.textContent = cfg.mode === "on-the-ground" ? "切换为悬浮图标" : "切换为贴地图标";
+        rebuild();
+    };
+
+    await view.when();
+    rebuild();
+    view.goTo(gl.graphics.toArray(), { duration: 1500 }).catch(() => {});
+    setStatus("IconSymbol3D 示例就绪 | 切换贴地/悬浮模式后旋转场景对比图标朝向");
+</script>
+</body>
+</html>
