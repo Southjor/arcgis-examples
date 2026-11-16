@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>第53课：Symbol 专题 - 面符号 SimpleFillSymbol</title>
+    <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css">
+    <script type="module" src="https://js.arcgis.com/5.0/"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: "Microsoft YaHei", sans-serif; }
+        #mapContainer { width: 100vw; height: 100vh; }
+        .page-title {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(255,255,255,0.95); padding: 10px 24px; border-radius: 6px;
+            font-size: 18px; font-weight: bold; z-index: 100;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .panel {
+            position: absolute; top: 80px; right: 20px; width: 300px;
+            background: rgba(255,255,255,0.95); padding: 16px; border-radius: 8px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15); z-index: 100;
+        }
+        .panel h3 { margin: 0 0 10px 0; font-size: 14px; }
+        .form-group { margin-bottom: 8px; }
+        .form-group label { display: block; font-size: 12px; margin-bottom: 4px; color: #555; }
+        .form-group select,
+        .form-group input[type="range"] { width: 100%; }
+        .form-group input[type="color"] { width: 100%; height: 28px; border: 1px solid #d9d9d9; }
+        .val { float: right; color: #1890ff; font-weight: bold; }
+        .btn-row { display: flex; gap: 8px; margin-top: 10px; }
+        .btn-row button {
+            flex: 1; padding: 6px 0; font-size: 12px;
+            border: 1px solid #d9d9d9; border-radius: 4px;
+            background: white; cursor: pointer;
+        }
+        .btn-row button:hover { border-color: #1890ff; color: #1890ff; }
+        .tip {
+            margin-top: 10px; padding: 8px; font-size: 11px; line-height: 1.6;
+            background: #fff7e6; border-left: 3px solid #faad14; border-radius: 3px; color: #614700;
+        }
+        .status {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.7); color: white; padding: 8px 20px;
+            border-radius: 20px; font-size: 13px; z-index: 100; pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+<h1 class="page-title">第53课：Symbol 专题 - 面符号 SimpleFillSymbol</h1>
+
+<div class="panel">
+    <h3>🔷 面符号参数</h3>
+
+    <div class="form-group">
+        <label>填充样式 style</label>
+        <select id="selStyle">
+            <option value="solid">solid 实心</option>
+            <option value="none">none 无填充</option>
+            <option value="horizontal">horizontal 横线</option>
+            <option value="vertical">vertical 竖线</option>
+            <option value="cross">cross 十字网格</option>
+            <option value="forward-diagonal">forward-diagonal 正斜线</option>
+            <option value="backward-diagonal">backward-diagonal 反斜线</option>
+            <option value="diagonal-cross">diagonal-cross 斜十字</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label>填充色 color</label>
+        <input type="color" id="clrColor" value="#3d8bfd">
+    </div>
+
+    <div class="form-group">
+        <label>填充透明度<span class="val" id="vAlpha">0.6</span></label>
+        <input type="range" id="rngAlpha" min="0" max="1" step="0.05" value="0.6">
+    </div>
+
+    <div class="form-group">
+        <label>轮廓宽度 outline.width<span class="val" id="vOutline">2</span></label>
+        <input type="range" id="rngOutline" min="0" max="6" step="0.5" value="2">
+    </div>
+
+    <div class="form-group">
+        <label>轮廓颜色 outline.color</label>
+        <input type="color" id="clrOutline" value="#ffffff">
+    </div>
+
+    <div class="form-group">
+        <label>高度模式 elevationInfo</label>
+        <select id="selElev">
+            <option value="on-the-ground">on-the-ground 贴地</option>
+            <option value="relative-to-ground">relative-to-ground 离地</option>
+        </select>
+    </div>
+
+    <div class="btn-row">
+        <button id="btnToggle3D">切换为 PolygonSymbol3D</button>
+    </div>
+
+    <div class="tip">
+        💡 二维面符号在三维中是<b>贴地的平面片</b>，没有厚度。
+        官方建议三维用 <b>PolygonSymbol3D</b>（ExtrudeSymbol3DLayer 可拉伸成体块）。
+    </div>
+</div>
+
+<div class="status" id="st">面符号 | 调整参数观察三维场景中的变化</div>
+<div id="mapContainer"></div>
+
+<script type="module">
+    const Map = await $arcgis.import("@arcgis/core/Map.js");
+    const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
+    const GraphicsLayer = await $arcgis.import("@arcgis/core/layers/GraphicsLayer.js");
+    const Graphic = await $arcgis.import("@arcgis/core/Graphic.js");
+    const Polygon = await $arcgis.import("@arcgis/core/geometry/Polygon.js");
+    const SimpleFillSymbol = await $arcgis.import("@arcgis/core/symbols/SimpleFillSymbol.js");
+    const ElevationLayer = await $arcgis.import("@arcgis/core/layers/ElevationLayer.js");
+    const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
+
+    const tl = getTianditu.default({ type: "vec_w" });
+    const map = new Map({
+        basemap: { baseLayers: [tl.base, tl.anno] },
+        ground: {
+            surface: {
+                elevationLayers: [new ElevationLayer({
+                    url: "https://www.geosceneonline.cn/image/rest/services/OpenData/ChinaTerrain3D/ImageServer/"
+                })]
+            }
+        }
+    });
+
+    const view = new SceneView({
+        container: "mapContainer",
+        map: map,
+        camera: { position: { longitude: 121.473, latitude: 31.230, z: 1000 }, heading: 15, tilt: 55 }
+    });
+
+    const gl = new GraphicsLayer({ title: "规划地块", elevationInfo: { mode: "on-the-ground" } });
+    map.add(gl);
+
+    // 三个地块（z 用于 relative-to-ground 模式）
+    const blocks = [
+        {
+            name: "地块A",
+            rings: [[[121.4640, 31.2360, 20], [121.4700, 31.2360, 20], [121.4700, 31.2310, 20], [121.4640, 31.2310, 20], [121.4640, 31.2360, 20]]]
+        },
+        {
+            name: "地块B",
+            rings: [[[121.4720, 31.2360, 60], [121.4780, 31.2360, 60], [121.4780, 31.2310, 60], [121.4720, 31.2310, 60], [121.4720, 31.2360, 60]]]
+        },
+        {
+            name: "地块C",
+            rings: [[[121.4800, 31.2360, 100], [121.4860, 31.2360, 100], [121.4860, 31.2310, 100], [121.4800, 31.2310, 100], [121.4800, 31.2360, 100]]]
+        }
+    ];
+
+    const cfg = {
+        style: "solid", color: "#3d8bfd", alpha: 0.6,
+        outline: 2, outlineColor: "#ffffff", mode: "on-the-ground", use3D: false
+    };
+
+    // hex 颜色 + 透明度 → rgba 数组
+    function toRgba(hex, alpha) {
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        return [r, g, b, alpha];
+    }
+
+    function buildSymbol() {
+        if (cfg.use3D) {
+            // 三维面符号：ExtrudeSymbol3DLayer 把面拉伸成体块（size 单位：米）
+            return {
+                type: "polygon-3d",
+                symbolLayers: [{
+                    type: "extrude",
+                    size: 180,
+                    material: { color: toRgba(cfg.color, cfg.alpha) }
+                }]
+            };
+        }
+        return new SimpleFillSymbol({
+            style: cfg.style,
+            color: toRgba(cfg.color, cfg.alpha),
+            outline: { color: cfg.outlineColor, width: cfg.outline }
+        });
+    }
+
+    function rebuild() {
+        const symbol = buildSymbol();
+        gl.elevationInfo = { mode: cfg.mode };
+        gl.removeAll();
+        blocks.forEach((b, i) => {
+            gl.add(new Graphic({
+                geometry: new Polygon({ rings: b.rings, spatialReference: { wkid: 4326 } }),
+                symbol: symbol,
+                attributes: { OBJECTID: i + 1, NAME: b.name }
+            }));
+        });
+        setStatus("已更新：" + (cfg.use3D ? "PolygonSymbol3D（拉伸体块）" : "SimpleFillSymbol（平面片）"));
+    }
+
+    function setStatus(msg) { document.getElementById("st").textContent = msg; }
+
+    document.getElementById("selStyle").onchange = (e) => { cfg.style = e.target.value; rebuild(); };
+    document.getElementById("clrColor").oninput = (e) => { cfg.color = e.target.value; rebuild(); };
+    document.getElementById("rngAlpha").oninput = (e) => {
+        cfg.alpha = Number(e.target.value);
+        document.getElementById("vAlpha").textContent = cfg.alpha.toFixed(2);
+        rebuild();
+    };
+    document.getElementById("rngOutline").oninput = (e) => {
+        cfg.outline = Number(e.target.value);
+        document.getElementById("vOutline").textContent = cfg.outline;
+        rebuild();
+    };
+    document.getElementById("clrOutline").oninput = (e) => { cfg.outlineColor = e.target.value; rebuild(); };
+    document.getElementById("selElev").onchange = (e) => { cfg.mode = e.target.value; rebuild(); };
+    document.getElementById("btnToggle3D").onclick = (e) => {
+        cfg.use3D = !cfg.use3D;
+        e.target.textContent = cfg.use3D ? "切换为 SimpleFillSymbol" : "切换为 PolygonSymbol3D";
+        rebuild();
+    };
+
+    await view.when();
+    rebuild();
+    view.goTo(gl.graphics.toArray(), { duration: 1500 }).catch(() => {});
+    setStatus("面符号示例就绪 | 三个地块默认贴地显示");
+</script>
+</body>
+</html>
