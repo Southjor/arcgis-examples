@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>第54课：Symbol 专题 - 文本符号 TextSymbol</title>
+    <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css">
+    <script type="module" src="https://js.arcgis.com/5.0/"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: "Microsoft YaHei", sans-serif; }
+        #mapContainer { width: 100vw; height: 100vh; }
+        .page-title {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(255,255,255,0.95); padding: 10px 24px; border-radius: 6px;
+            font-size: 18px; font-weight: bold; z-index: 100;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .panel {
+            position: absolute; top: 80px; right: 20px; width: 300px;
+            background: rgba(255,255,255,0.95); padding: 16px; border-radius: 8px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15); z-index: 100;
+            max-height: 80vh; overflow-y: auto;
+        }
+        .panel h3 { margin: 0 0 10px 0; font-size: 14px; }
+        .form-group { margin-bottom: 8px; }
+        .form-group label { display: block; font-size: 12px; margin-bottom: 4px; color: #555; }
+        .form-group input[type="text"] { width: 100%; padding: 5px 8px; border: 1px solid #d9d9d9; border-radius: 4px; }
+        .form-group select,
+        .form-group input[type="range"] { width: 100%; }
+        .form-group input[type="color"] { width: 100%; height: 28px; border: 1px solid #d9d9d9; }
+        .val { float: right; color: #1890ff; font-weight: bold; }
+        .btn-row { display: flex; gap: 8px; margin-top: 10px; }
+        .btn-row button {
+            flex: 1; padding: 6px 0; font-size: 12px;
+            border: 1px solid #d9d9d9; border-radius: 4px;
+            background: white; cursor: pointer;
+        }
+        .btn-row button:hover { border-color: #1890ff; color: #1890ff; }
+        .tip {
+            margin-top: 10px; padding: 8px; font-size: 11px; line-height: 1.6;
+            background: #fff7e6; border-left: 3px solid #faad14; border-radius: 3px; color: #614700;
+        }
+        .status {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.7); color: white; padding: 8px 20px;
+            border-radius: 20px; font-size: 13px; z-index: 100; pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+<h1 class="page-title">第54课：Symbol 专题 - 文本符号 TextSymbol</h1>
+
+<div class="panel">
+    <h3>🔤 文本符号参数</h3>
+
+    <div class="form-group">
+        <label>文本 text</label>
+        <input type="text" id="inpText" value="环球金融中心">
+    </div>
+
+    <div class="form-group">
+        <label>字号 font.size<span class="val" id="vSize">14</span></label>
+        <input type="range" id="rngSize" min="8" max="36" step="1" value="14">
+    </div>
+
+    <div class="form-group">
+        <label>文字颜色 color</label>
+        <input type="color" id="clrColor" value="#ffffff">
+    </div>
+
+    <div class="form-group">
+        <label>光晕颜色 haloColor</label>
+        <input type="color" id="clrHalo" value="#000000">
+    </div>
+
+    <div class="form-group">
+        <label>光晕大小 haloSize<span class="val" id="vHalo">2</span></label>
+        <input type="range" id="rngHalo" min="0" max="4" step="0.5" value="2">
+    </div>
+
+    <div class="form-group">
+        <label>背景色 backgroundColor</label>
+        <input type="color" id="clrBg" value="#0d47a1">
+    </div>
+
+    <div class="form-group">
+        <label>水平对齐 horizontalAlignment</label>
+        <select id="selHAlign">
+            <option value="center">center</option>
+            <option value="left">left</option>
+            <option value="right">right</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label>垂直对齐 verticalAlignment</label>
+        <select id="selVAlign">
+            <option value="baseline">baseline</option>
+            <option value="top">top</option>
+            <option value="middle">middle</option>
+            <option value="bottom">bottom</option>
+        </select>
+    </div>
+
+    <div class="btn-row">
+        <button id="btnAngle">尝试 angle=45</button>
+        <button id="btnOffset">尝试 yoffset</button>
+    </div>
+
+    <div class="tip">
+        ⚠️ 三维限制：<code>angle</code>、<code>xoffset</code>、<code>yoffset</code>、
+        <code>rotated</code>、<code>lineWidth</code> 在 3D SceneView 中<b>均不支持</b>；
+        且 <code>Font.family</code> 在 2D / 3D 的可用字体不同。三维标注推荐用 <b>LabelSymbol3D</b>。
+    </div>
+</div>
+
+<div class="status" id="st">文本符号 | 调整参数观察三维场景中的文字标注</div>
+<div id="mapContainer"></div>
+
+<script type="module">
+    const Map = await $arcgis.import("@arcgis/core/Map.js");
+    const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
+    const GraphicsLayer = await $arcgis.import("@arcgis/core/layers/GraphicsLayer.js");
+    const Graphic = await $arcgis.import("@arcgis/core/Graphic.js");
+    const Point = await $arcgis.import("@arcgis/core/geometry/Point.js");
+    const TextSymbol = await $arcgis.import("@arcgis/core/symbols/TextSymbol.js");
+    const ElevationLayer = await $arcgis.import("@arcgis/core/layers/ElevationLayer.js");
+    const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
+
+    const tl = getTianditu.default({ type: "vec_w" });
+    const map = new Map({
+        basemap: { baseLayers: [tl.base, tl.anno] },
+        ground: {
+            surface: {
+                elevationLayers: [new ElevationLayer({
+                    url: "https://www.geosceneonline.cn/image/rest/services/OpenData/ChinaTerrain3D/ImageServer/"
+                })]
+            }
+        }
+    });
+
+    const view = new SceneView({
+        container: "mapContainer",
+        map: map,
+        camera: { position: { longitude: 121.473, latitude: 31.230, z: 800 }, heading: 0, tilt: 60 }
+    });
+
+    const gl = new GraphicsLayer({ title: "文字标注", elevationInfo: { mode: "relative-to-ground" } });
+    map.add(gl);
+
+    // 三个高层建筑点位
+    const towers = [
+        { x: 121.4730, y: 31.2330, z: 480, name: "环球金融中心" },
+        { x: 121.4780, y: 31.2280, z: 620, name: "上海中心大厦" },
+        { x: 121.4690, y: 31.2270, z: 420, name: "金茂大厦" }
+    ];
+
+    const cfg = {
+        text: "环球金融中心", size: 14, color: "#ffffff",
+        haloColor: "#000000", haloSize: 2, bgColor: "#0d47a1",
+        hAlign: "center", vAlign: "baseline"
+    };
+
+    function buildSymbol() {
+        return new TextSymbol({
+            text: cfg.text,
+            color: cfg.color,
+            haloColor: cfg.haloColor,
+            haloSize: cfg.haloSize,
+            backgroundColor: cfg.bgColor,
+            font: { size: cfg.size, family: "sans-serif", weight: "bold" },
+            horizontalAlignment: cfg.hAlign,
+            verticalAlignment: cfg.vAlign
+        });
+    }
+
+    function rebuild() {
+        const symbol = buildSymbol();
+        gl.removeAll();
+        towers.forEach((t, i) => {
+            // 只用第一个点显示面板里的文本，其余点显示各自名称
+            const label = i === 0 ? cfg.text : t.name;
+            gl.add(new Graphic({
+                geometry: new Point({ longitude: t.x, latitude: t.y, z: t.z, spatialReference: { wkid: 4326 } }),
+                symbol: i === 0 ? symbol : new TextSymbol({
+                    text: label,
+                    color: "#ffffff",
+                    haloColor: "#000000",
+                    haloSize: 1.5,
+                    font: { size: 12, family: "sans-serif" }
+                }),
+                attributes: { OBJECTID: i + 1, NAME: t.name }
+            }));
+        });
+        setStatus("已更新文字标注 | 光晕可在复杂底图上保证可读性");
+    }
+
+    function setStatus(msg) { document.getElementById("st").textContent = msg; }
+
+    document.getElementById("inpText").oninput = (e) => { cfg.text = e.target.value; rebuild(); };
+    document.getElementById("rngSize").oninput = (e) => {
+        cfg.size = Number(e.target.value);
+        document.getElementById("vSize").textContent = cfg.size;
+        rebuild();
+    };
+    document.getElementById("clrColor").oninput = (e) => { cfg.color = e.target.value; rebuild(); };
+    document.getElementById("clrHalo").oninput = (e) => { cfg.haloColor = e.target.value; rebuild(); };
+    document.getElementById("rngHalo").oninput = (e) => {
+        cfg.haloSize = Number(e.target.value);
+        document.getElementById("vHalo").textContent = cfg.haloSize;
+        rebuild();
+    };
+    document.getElementById("clrBg").oninput = (e) => { cfg.bgColor = e.target.value; rebuild(); };
+    document.getElementById("selHAlign").onchange = (e) => { cfg.hAlign = e.target.value; rebuild(); };
+    document.getElementById("selVAlign").onchange = (e) => { cfg.vAlign = e.target.value; rebuild(); };
+
+    // 演示 3D 不支持的属性：设置了也不生效，弹出说明
+    document.getElementById("btnAngle").onclick = () => {
+        setStatus("angle 属性在 3D SceneView 中不支持（官方限制），文字角度不会变化");
+    };
+    document.getElementById("btnOffset").onclick = () => {
+        setStatus("xoffset / yoffset 属性在 3D SceneView 中不支持（官方限制），文字位置不会偏移");
+    };
+
+    await view.when();
+    rebuild();
+    view.goTo(gl.graphics.toArray(), { duration: 1500 }).catch(() => {});
+    setStatus("文本符号示例就绪 | 文字悬浮于建筑顶部高度");
+</script>
+</body>
+</html>
