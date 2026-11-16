@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>第59课：Symbol 专题 - LineSymbol3D 三维线符号</title>
+    <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css">
+    <script type="module" src="https://js.arcgis.com/5.0/"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: "Microsoft YaHei", sans-serif; }
+        #mapContainer { width: 100vw; height: 100vh; }
+        .page-title {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(255,255,255,0.95); padding: 10px 24px; border-radius: 6px;
+            font-size: 18px; font-weight: bold; z-index: 100;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .panel {
+            position: absolute; top: 80px; right: 20px; width: 300px;
+            background: rgba(255,255,255,0.95); padding: 16px; border-radius: 8px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15); z-index: 100;
+        }
+        .panel h3 { margin: 0 0 10px 0; font-size: 14px; }
+        .form-group { margin-bottom: 8px; }
+        .form-group label { display: block; font-size: 12px; margin-bottom: 4px; color: #555; }
+        .form-group select,
+        .form-group input[type="range"] { width: 100%; }
+        .form-group input[type="color"] { width: 100%; height: 28px; border: 1px solid #d9d9d9; }
+        .val { float: right; color: #1890ff; font-weight: bold; }
+        .btn-row { display: flex; gap: 8px; margin-top: 10px; }
+        .btn-row button {
+            flex: 1; padding: 6px 0; font-size: 12px;
+            border: 1px solid #d9d9d9; border-radius: 4px;
+            background: white; cursor: pointer;
+        }
+        .btn-row button:hover { border-color: #1890ff; color: #1890ff; }
+        .tip {
+            margin-top: 10px; padding: 8px; font-size: 11px; line-height: 1.6;
+            background: #e6f7ff; border-left: 3px solid #1890ff; border-radius: 3px; color: #003a8c;
+        }
+        .status {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.7); color: white; padding: 8px 20px;
+            border-radius: 20px; font-size: 13px; z-index: 100; pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+<h1 class="page-title">第59课：Symbol 专题 - LineSymbol3D 三维线符号</h1>
+
+<div class="panel">
+    <h3>📏 PathSymbol3DLayer 参数</h3>
+
+    <div class="btn-row" style="margin: 0 0 10px 0;">
+        <button id="btnPipe">管道预设</button>
+        <button id="btnStrip">带状预设</button>
+        <button id="btnWall">墙体预设</button>
+        <button id="btnFlat">扁平线预设</button>
+    </div>
+
+    <div class="form-group">
+        <label>剖面 profile</label>
+        <select id="selProfile">
+            <option value="circle">circle 圆形（管状）</option>
+            <option value="quad">quad 矩形（带/墙）</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label>宽度 width（米）<span class="val" id="vWidth">12</span></label>
+        <input type="range" id="rngWidth" min="1" max="60" step="1" value="12">
+    </div>
+
+    <div class="form-group">
+        <label>高度 height（米）<span class="val" id="vHeight">12</span></label>
+        <input type="range" id="rngHeight" min="1" max="60" step="1" value="12">
+    </div>
+
+    <div class="form-group">
+        <label>颜色 material.color</label>
+        <input type="color" id="clrColor" value="#1890ff">
+    </div>
+
+    <div class="form-group">
+        <label>端面 cap</label>
+        <select id="selCap">
+            <option value="butt">butt 平头（默认）</option>
+            <option value="round">round 圆头</option>
+            <option value="square">square 方头</option>
+            <option value="none">none 不封口</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label>折点 join</label>
+        <select id="selJoin">
+            <option value="miter">miter 斜接（默认）</option>
+            <option value="round">round 圆角</option>
+            <option value="bevel">bevel 切角</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label>剖面旋转 profileRotation</label>
+        <select id="selRot">
+            <option value="all">all（circle 推荐）</option>
+            <option value="heading">heading（quad 直立推荐）</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label>截面锚点 anchor</label>
+        <select id="selAnchor">
+            <option value="center">center 截面居中（默认）</option>
+            <option value="bottom">bottom 截面在路径之上</option>
+            <option value="top">top 截面在路径之下</option>
+        </select>
+    </div>
+
+    <div class="btn-row">
+        <button id="btnEmissive">切换自发光</button>
+    </div>
+
+    <div class="tip">
+        💡 width/height 单位是<b>米</b>；只设其一时另一个自动取同值，
+        两个都不设则不显示。profile 只有 <code>circle</code> / <code>quad</code> 两种。
+    </div>
+</div>
+
+<div class="status" id="st">LineSymbol3D | 管网、导线、围墙的管状/带状可视化</div>
+<div id="mapContainer"></div>
+
+<script type="module">
+    const Map = await $arcgis.import("@arcgis/core/Map.js");
+    const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
+    const GraphicsLayer = await $arcgis.import("@arcgis/core/layers/GraphicsLayer.js");
+    const Graphic = await $arcgis.import("@arcgis/core/Graphic.js");
+    const Polyline = await $arcgis.import("@arcgis/core/geometry/Polyline.js");
+    const ElevationLayer = await $arcgis.import("@arcgis/core/layers/ElevationLayer.js");
+    const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
+
+    const tl = getTianditu.default({ type: "vec_w" });
+    const map = new Map({
+        basemap: { baseLayers: [tl.base, tl.anno] },
+        ground: {
+            surface: {
+                elevationLayers: [new ElevationLayer({
+                    url: "https://www.geosceneonline.cn/image/rest/services/OpenData/ChinaTerrain3D/ImageServer/"
+                })]
+            }
+        }
+    });
+
+    const view = new SceneView({
+        container: "mapContainer",
+        map: map,
+        camera: { position: { longitude: 121.473, latitude: 31.227, z: 1000 }, heading: 15, tilt: 62 }
+    });
+
+    // relative-to-ground：路径顶点 z 值决定架空高度
+    const gl = new GraphicsLayer({ title: "管网", elevationInfo: { mode: "relative-to-ground" } });
+    map.add(gl);
+
+    // 三条管线（供水主管 / 电缆 / 支管），顶点带 z 值
+    const lines = [
+        {
+            name: "供水主管",
+            paths: [[[121.4600, 31.2380, 40], [121.4700, 31.2340, 55], [121.4800, 31.2370, 40], [121.4900, 31.2290, 50]]]
+        },
+        {
+            name: "电缆",
+            paths: [[[121.4640, 31.2430, 60], [121.4740, 31.2400, 75], [121.4840, 31.2420, 60]]]
+        },
+        {
+            name: "燃气管",
+            paths: [[[121.4700, 31.2220, 30], [121.4800, 31.2180, 35], [121.4900, 31.2210, 30]]]
+        }
+    ];
+
+    const cfg = {
+        layerType: "path",   // "path" 立体路径 / "line" 扁平线（LineSymbol3DLayer）
+        profile: "circle", width: 12, height: 12, color: "#1890ff",
+        cap: "round", join: "round", profileRotation: "all",
+        anchor: "center", emissive: false
+    };
+
+    function buildSymbol() {
+        // 扁平线模式：LineSymbol3DLayer（屏幕像素宽，无体积，虚线可用 pattern）
+        if (cfg.layerType === "line") {
+            return {
+                type: "line-3d",
+                symbolLayers: [{
+                    type: "line",
+                    size: Math.max(1, Math.round(cfg.width / 6)),
+                    material: { color: cfg.color },
+                    cap: cfg.cap,
+                    join: cfg.join
+                }]
+            };
+        }
+        // 立体路径模式：PathSymbol3DLayer（世界米，管状/带状/墙体）
+        const layer = {
+            type: "path",
+            profile: cfg.profile,
+            width: cfg.width,
+            height: cfg.height,
+            cap: cfg.cap,
+            join: cfg.join,
+            profileRotation: cfg.profileRotation,
+            anchor: cfg.anchor
+        };
+        layer.material = cfg.emissive
+            ? { color: cfg.color, emissive: { strength: 1, source: "color" } }
+            : { color: cfg.color };
+        return { type: "line-3d", symbolLayers: [layer] };
+    }
+
+    function rebuild() {
+        const symbol = buildSymbol();
+        gl.removeAll();
+        lines.forEach((l, i) => {
+            gl.add(new Graphic({
+                geometry: new Polyline({ paths: l.paths, spatialReference: { wkid: 4326 } }),
+                symbol: symbol,
+                attributes: { OBJECTID: i + 1, NAME: l.name }
+            }));
+        });
+        setStatus("已更新 | " + (cfg.layerType === "line" ? "LineSymbol3DLayer 扁平线" : cfg.profile + " 剖面 " + cfg.width + "×" + cfg.height + " 米"));
+    }
+
+    function setStatus(msg) { document.getElementById("st").textContent = msg; }
+
+    function applyPreset(p) {
+        Object.assign(cfg, p);
+        document.getElementById("selProfile").value = cfg.profile;
+        document.getElementById("rngWidth").value = cfg.width;
+        document.getElementById("rngHeight").value = cfg.height;
+        document.getElementById("vWidth").textContent = cfg.width;
+        document.getElementById("vHeight").textContent = cfg.height;
+        document.getElementById("selCap").value = cfg.cap;
+        document.getElementById("selJoin").value = cfg.join;
+        document.getElementById("selRot").value = cfg.profileRotation;
+        document.getElementById("selAnchor").value = cfg.anchor;
+        rebuild();
+    }
+
+    document.getElementById("btnPipe").onclick = () => {
+        applyPreset({ layerType: "path", profile: "circle", width: 12, height: 12, cap: "round", join: "round", profileRotation: "all", anchor: "center" });
+        setStatus("管道预设：circle 圆形剖面，适合供水/燃气管道");
+    };
+    document.getElementById("btnStrip").onclick = () => {
+        applyPreset({ layerType: "path", profile: "quad", width: 30, height: 2, cap: "butt", join: "round", profileRotation: "heading", anchor: "center" });
+        setStatus("带状预设：quad 扁矩形，适合电缆、传送带");
+    };
+    document.getElementById("btnWall").onclick = () => {
+        applyPreset({ layerType: "path", profile: "quad", width: 2, height: 30, cap: "butt", join: "miter", profileRotation: "heading", anchor: "bottom" });
+        setStatus("墙体预设：quad 竖矩形 + bottom 锚点，沿路径生成立墙");
+    };
+    document.getElementById("btnFlat").onclick = () => {
+        applyPreset({ layerType: "line", width: 12, height: 12 });
+        setStatus("扁平线预设：LineSymbol3DLayer，屏幕像素宽、无体积，示意性走向用它更轻量");
+    };
+
+    document.getElementById("selProfile").onchange = (e) => { cfg.profile = e.target.value; rebuild(); };
+    document.getElementById("rngWidth").oninput = (e) => {
+        cfg.width = Number(e.target.value);
+        document.getElementById("vWidth").textContent = cfg.width;
+        rebuild();
+    };
+    document.getElementById("rngHeight").oninput = (e) => {
+        cfg.height = Number(e.target.value);
+        document.getElementById("vHeight").textContent = cfg.height;
+        rebuild();
+    };
+    document.getElementById("clrColor").oninput = (e) => { cfg.color = e.target.value; rebuild(); };
+    document.getElementById("selCap").onchange = (e) => { cfg.cap = e.target.value; rebuild(); };
+    document.getElementById("selJoin").onchange = (e) => { cfg.join = e.target.value; rebuild(); };
+    document.getElementById("selRot").onchange = (e) => { cfg.profileRotation = e.target.value; rebuild(); };
+    document.getElementById("selAnchor").onchange = (e) => { cfg.anchor = e.target.value; rebuild(); };
+    document.getElementById("btnEmissive").onclick = (e) => {
+        cfg.emissive = !cfg.emissive;
+        e.target.textContent = cfg.emissive ? "关闭自发光" : "切换自发光";
+        rebuild();
+    };
+
+    await view.when();
+    applyPreset({ layerType: "path", profile: "circle", width: 12, height: 12, cap: "round", join: "round", profileRotation: "all", anchor: "center" });
+    view.goTo(gl.graphics.toArray(), { duration: 1500 }).catch(() => {});
+    setStatus("LineSymbol3D 示例就绪 | 三条架空管线按顶点 z 值悬浮");
+</script>
+</body>
+</html>
