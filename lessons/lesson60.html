@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>第60课：Symbol 专题 - PolygonSymbol3D 三维面符号</title>
+    <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css">
+    <script type="module" src="https://js.arcgis.com/5.0/"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: "Microsoft YaHei", sans-serif; }
+        #mapContainer { width: 100vw; height: 100vh; }
+        .page-title {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(255,255,255,0.95); padding: 10px 24px; border-radius: 6px;
+            font-size: 18px; font-weight: bold; z-index: 100;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .panel {
+            position: absolute; top: 80px; right: 20px; width: 300px;
+            background: rgba(255,255,255,0.95); padding: 16px; border-radius: 8px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15); z-index: 100;
+        }
+        .panel h3 { margin: 0 0 10px 0; font-size: 14px; }
+        .form-group { margin-bottom: 8px; }
+        .form-group label { display: block; font-size: 12px; margin-bottom: 4px; color: #555; }
+        .form-group input[type="range"] { width: 100%; }
+        .form-group input[type="color"] { width: 100%; height: 28px; border: 1px solid #d9d9d9; }
+        .val { float: right; color: #1890ff; font-weight: bold; }
+        .btn-row { display: flex; gap: 8px; margin-top: 10px; }
+        .btn-row button {
+            flex: 1; padding: 6px 0; font-size: 12px;
+            border: 1px solid #d9d9d9; border-radius: 4px;
+            background: white; cursor: pointer;
+        }
+        .btn-row button:hover { border-color: #1890ff; color: #1890ff; }
+        .tip {
+            margin-top: 10px; padding: 8px; font-size: 11px; line-height: 1.6;
+            background: #e6f7ff; border-left: 3px solid #1890ff; border-radius: 3px; color: #003a8c;
+        }
+        .status {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.7); color: white; padding: 8px 20px;
+            border-radius: 20px; font-size: 13px; z-index: 100; pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+<h1 class="page-title">第60课：Symbol 专题 - PolygonSymbol3D 三维面符号</h1>
+
+<div class="panel">
+    <h3>🔶 ExtrudeSymbol3DLayer 参数</h3>
+
+    <div class="form-group">
+        <label>拉伸高度 size（米，负值向下）<span class="val" id="vSize">180</span></label>
+        <input type="range" id="rngSize" min="-100" max="400" step="10" value="180">
+    </div>
+
+    <div class="form-group">
+        <label>体块颜色 material.color</label>
+        <input type="color" id="clrColor" value="#f5a623">
+    </div>
+
+    <div class="form-group">
+        <label>透明度 alpha<span class="val" id="vAlpha">0.8</span></label>
+        <input type="range" id="rngAlpha" min="0.1" max="1" step="0.05" value="0.8">
+    </div>
+
+    <div class="btn-row">
+        <button id="btnEdges">开关边线 edges</button>
+        <button id="btnFill">开关底面 fill</button>
+    </div>
+
+    <div class="btn-row">
+        <button id="btnShadow">开关投影</button>
+        <button id="btnDown">基坑演示（-60m）</button>
+    </div>
+
+    <div class="tip">
+        💡 <code>size</code> 单位是<b>米</b>，支持<b>负值向下拉伸</b>（基坑/地下室）；
+        生产环境用 size 视觉变量绑定高度字段（如容积率、楼高）实现数据驱动体块。
+    </div>
+</div>
+
+<div class="status" id="st">PolygonSymbol3D | 地块体量拉伸展示</div>
+<div id="mapContainer"></div>
+
+<script type="module">
+    const Map = await $arcgis.import("@arcgis/core/Map.js");
+    const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
+    const GraphicsLayer = await $arcgis.import("@arcgis/core/layers/GraphicsLayer.js");
+    const Graphic = await $arcgis.import("@arcgis/core/Graphic.js");
+    const Polygon = await $arcgis.import("@arcgis/core/geometry/Polygon.js");
+    const ElevationLayer = await $arcgis.import("@arcgis/core/layers/ElevationLayer.js");
+    const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
+
+    const tl = getTianditu.default({ type: "vec_w" });
+    const map = new Map({
+        basemap: { baseLayers: [tl.base, tl.anno] },
+        ground: {
+            surface: {
+                elevationLayers: [new ElevationLayer({
+                    url: "https://www.geosceneonline.cn/image/rest/services/OpenData/ChinaTerrain3D/ImageServer/"
+                })]
+            }
+        }
+    });
+
+    const view = new SceneView({
+        container: "mapContainer",
+        map: map,
+        camera: { position: { longitude: 121.473, latitude: 31.227, z: 1100 }, heading: 15, tilt: 62 },
+        environment: { lighting: { directShadowsEnabled: true } }
+    });
+
+    const gl = new GraphicsLayer({ title: "规划地块", elevationInfo: { mode: "on-the-ground" } });
+    map.add(gl);
+
+    // 六个地块（多边形，闭合 rings）
+    const blocks = [
+        { name: "地块A-商住", rings: ring(121.4600, 31.2380, 0.006, 0.004) },
+        { name: "地块B-办公", rings: ring(121.4700, 31.2380, 0.005, 0.004) },
+        { name: "地块C-商业", rings: ring(121.4790, 31.2380, 0.005, 0.004) },
+        { name: "地块D-住宅", rings: ring(121.4600, 31.2300, 0.006, 0.004) },
+        { name: "地块E-文体", rings: ring(121.4700, 31.2300, 0.005, 0.004) },
+        { name: "地块F-地下空间", rings: ring(121.4790, 31.2300, 0.005, 0.004) }
+    ];
+
+    function ring(x, y, dx, dy) {
+        return [
+            [x, y, 0], [x + dx, y, 0], [x + dx, y + dy, 0],
+            [x, y + dy, 0], [x, y, 0]
+        ];
+    }
+
+    const cfg = { size: 180, color: "#f5a623", alpha: 0.8, edges: true, fill: false, castShadows: true };
+
+    function buildSymbol() {
+        const layers = [];
+        // 底面填充层（可选）
+        if (cfg.fill) {
+            layers.push({
+                type: "fill",
+                material: { color: [0, 0, 0, 0.2] }
+            });
+        }
+        // 拉伸层
+        const extrude = {
+            type: "extrude",
+            size: cfg.size,
+            material: { color: hexToRgba(cfg.color, cfg.alpha) },
+            castShadows: cfg.castShadows
+        };
+        if (cfg.edges) {
+            extrude.edges = { type: "solid", color: [50, 50, 50, 0.5] };
+        }
+        layers.push(extrude);
+        return { type: "polygon-3d", symbolLayers: layers };
+    }
+
+    function hexToRgba(hex, alpha) {
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        return [r, g, b, alpha];
+    }
+
+    function rebuild() {
+        const symbol = buildSymbol();
+        gl.removeAll();
+        blocks.forEach((b, i) => {
+            gl.add(new Graphic({
+                geometry: new Polygon({ rings: b.rings, spatialReference: { wkid: 4326 } }),
+                symbol: symbol,
+                attributes: { OBJECTID: i + 1, NAME: b.name }
+            }));
+        });
+        const dir = cfg.size < 0 ? "向下（基坑）" : "向上";
+        setStatus("已更新 | 拉伸 " + cfg.size + " 米（" + dir + "）");
+    }
+
+    function setStatus(msg) { document.getElementById("st").textContent = msg; }
+
+    document.getElementById("rngSize").oninput = (e) => {
+        cfg.size = Number(e.target.value);
+        document.getElementById("vSize").textContent = cfg.size;
+        rebuild();
+    };
+    document.getElementById("clrColor").oninput = (e) => { cfg.color = e.target.value; rebuild(); };
+    document.getElementById("rngAlpha").oninput = (e) => {
+        cfg.alpha = Number(e.target.value);
+        document.getElementById("vAlpha").textContent = cfg.alpha.toFixed(2);
+        rebuild();
+    };
+    document.getElementById("btnEdges").onclick = (e) => {
+        cfg.edges = !cfg.edges;
+        e.target.classList.toggle("active", cfg.edges);
+        rebuild();
+    };
+    document.getElementById("btnFill").onclick = (e) => {
+        cfg.fill = !cfg.fill;
+        e.target.classList.toggle("active", cfg.fill);
+        rebuild();
+    };
+    document.getElementById("btnShadow").onclick = (e) => {
+        cfg.castShadows = !cfg.castShadows;
+        e.target.classList.toggle("active", cfg.castShadows);
+        rebuild();
+    };
+    document.getElementById("btnDown").onclick = () => {
+        cfg.size = -60;
+        document.getElementById("rngSize").value = -60;
+        document.getElementById("vSize").textContent = -60;
+        rebuild();
+        setStatus("负值拉伸：体块向下生长 60 米（地下室/基坑表达）");
+    };
+
+    document.getElementById("btnEdges").classList.add("active");
+
+    await view.when();
+    rebuild();
+    view.goTo(gl.graphics.toArray(), { duration: 1500 }).catch(() => {});
+    setStatus("PolygonSymbol3D 示例就绪 | 六个规划地块按统一高度拉伸");
+</script>
+</body>
+</html>
