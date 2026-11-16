@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>第58课：Symbol 专题 - TextSymbol3D 三维文字</title>
+    <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css">
+    <script type="module" src="https://js.arcgis.com/5.0/"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: "Microsoft YaHei", sans-serif; }
+        #mapContainer { width: 100vw; height: 100vh; }
+        .page-title {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(255,255,255,0.95); padding: 10px 24px; border-radius: 6px;
+            font-size: 18px; font-weight: bold; z-index: 100;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .panel {
+            position: absolute; top: 80px; right: 20px; width: 300px;
+            background: rgba(255,255,255,0.95); padding: 16px; border-radius: 8px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15); z-index: 100;
+        }
+        .panel h3 { margin: 0 0 10px 0; font-size: 14px; }
+        .form-group { margin-bottom: 8px; }
+        .form-group label { display: block; font-size: 12px; margin-bottom: 4px; color: #555; }
+        .form-group input[type="text"] { width: 100%; padding: 5px 8px; border: 1px solid #d9d9d9; border-radius: 4px; }
+        .form-group select,
+        .form-group input[type="range"] { width: 100%; }
+        .form-group input[type="color"] { width: 100%; height: 28px; border: 1px solid #d9d9d9; }
+        .val { float: right; color: #1890ff; font-weight: bold; }
+        .btn-row { display: flex; gap: 8px; margin-top: 10px; }
+        .btn-row button {
+            flex: 1; padding: 6px 0; font-size: 12px;
+            border: 1px solid #d9d9d9; border-radius: 4px;
+            background: white; cursor: pointer;
+        }
+        .btn-row button:hover { border-color: #1890ff; color: #1890ff; }
+        .btn-row button.active { background: #1890ff; color: white; border-color: #1890ff; }
+        .tip {
+            margin-top: 10px; padding: 8px; font-size: 11px; line-height: 1.6;
+            background: #e6f7ff; border-left: 3px solid #1890ff; border-radius: 3px; color: #003a8c;
+        }
+        .status {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.7); color: white; padding: 8px 20px;
+            border-radius: 20px; font-size: 13px; z-index: 100; pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+<h1 class="page-title">第58课：Symbol 专题 - TextSymbol3D 三维文字</h1>
+
+<div class="panel">
+    <h3>🔤 TextSymbol3DLayer 参数</h3>
+
+    <div class="form-group">
+        <label>文本 text（\n 换行）</label>
+        <input type="text" id="inpText" value="上海中心大厦\n632m">
+    </div>
+
+    <div class="form-group">
+        <label>字号 size<span class="val" id="vSize">14</span></label>
+        <input type="range" id="rngSize" min="8" max="36" step="1" value="14">
+    </div>
+
+    <div class="form-group">
+        <label>文字颜色 material.color</label>
+        <input type="color" id="clrColor" value="#ffffff">
+    </div>
+
+    <div class="form-group">
+        <label>光晕颜色 halo.color</label>
+        <input type="color" id="clrHalo" value="#003a8c">
+    </div>
+
+    <div class="form-group">
+        <label>光晕大小 halo.size<span class="val" id="vHalo">2</span></label>
+        <input type="range" id="rngHalo" min="0" max="4" step="0.5" value="2">
+    </div>
+
+    <div class="form-group">
+        <label>背景色 background.color</label>
+        <input type="color" id="clrBg" value="#0d47a1">
+    </div>
+
+    <div class="form-group">
+        <label>水平对齐 horizontalAlignment</label>
+        <select id="selHAlign">
+            <option value="center">center</option>
+            <option value="left">left</option>
+            <option value="right">right</option>
+        </select>
+    </div>
+
+    <div class="btn-row">
+        <button id="btnBg">开关背景</button>
+        <button id="btnCallout">开关引导线标注</button>
+    </div>
+
+    <div class="tip">
+        ⚠️ 注意：3D 文字层<b>没有</b> 2D 的 <code>backgroundColor</code> / <code>haloColor</code> 属性，
+        对应写法是对象形式的 <code>background: { color }</code> 与 <code>halo: { color, size }</code>。
+        文字始终面向相机。
+    </div>
+</div>
+
+<div class="status" id="st">TextSymbol3D | 三维浮动文字标注</div>
+<div id="mapContainer"></div>
+
+<script type="module">
+    const Map = await $arcgis.import("@arcgis/core/Map.js");
+    const SceneView = await $arcgis.import("@arcgis/core/views/SceneView.js");
+    const GraphicsLayer = await $arcgis.import("@arcgis/core/layers/GraphicsLayer.js");
+    const Graphic = await $arcgis.import("@arcgis/core/Graphic.js");
+    const Point = await $arcgis.import("@arcgis/core/geometry/Point.js");
+    const ElevationLayer = await $arcgis.import("@arcgis/core/layers/ElevationLayer.js");
+    const getTianditu = await $arcgis.import("https://openlayers.vip/examples/resources/tianditu.js");
+
+    const tl = getTianditu.default({ type: "vec_w" });
+    const map = new Map({
+        basemap: { baseLayers: [tl.base, tl.anno] },
+        ground: {
+            surface: {
+                elevationLayers: [new ElevationLayer({
+                    url: "https://www.geosceneonline.cn/image/rest/services/OpenData/ChinaTerrain3D/ImageServer/"
+                })]
+            }
+        }
+    });
+
+    const view = new SceneView({
+        container: "mapContainer",
+        map: map,
+        camera: { position: { longitude: 121.473, latitude: 31.230, z: 900 }, heading: 0, tilt: 60 }
+    });
+
+    // 建筑体块 + 文字标注两个图层
+    const glBuildings = new GraphicsLayer({ title: "建筑体块", elevationInfo: { mode: "on-the-ground" } });
+    const glLabels = new GraphicsLayer({ title: "文字标注", elevationInfo: { mode: "on-the-ground" } });
+    map.addMany([glBuildings, glLabels]);
+
+    const towers = [
+        { x: 121.4730, y: 31.2330, h: 632, name: "上海中心大厦\n632m", c: [120, 170, 230] },
+        { x: 121.4780, y: 31.2270, h: 492, name: "金茂大厦\n492m", c: [230, 160, 70] },
+        { x: 121.4690, y: 31.2270, h: 474, name: "环球金融中心\n474m", c: [120, 200, 160] }
+    ];
+
+    // 建筑体块（object 图层，底部锚点立在地面上）
+    towers.forEach((t, i) => {
+        glBuildings.add(new Graphic({
+            geometry: new Point({ longitude: t.x, latitude: t.y, z: 0, spatialReference: { wkid: 4326 } }),
+            symbol: {
+                type: "point-3d",
+                symbolLayers: [{
+                    type: "object",
+                    resource: { primitive: "cube" },
+                    width: 100, depth: 100, height: t.h,
+                    material: { color: t.c },
+                    anchor: "relative",
+                    anchorPosition: { x: 0, y: 0, z: -0.5 }
+                }]
+            },
+            attributes: { OBJECTID: i + 1, NAME: t.name }
+        }));
+    });
+
+    const cfg = {
+        text: "上海中心大厦\n632m", size: 14, color: "#ffffff",
+        haloColor: "#003a8c", haloSize: 2, bgColor: "#0d47a1",
+        bgOn: true, hAlign: "center", callout: false
+    };
+
+    function buildSymbol() {
+        const layer = {
+            type: "text",
+            text: cfg.text,
+            size: cfg.size,
+            material: { color: cfg.color },
+            halo: { color: cfg.haloColor, size: cfg.haloSize },
+            horizontalAlignment: cfg.hAlign
+        };
+        if (cfg.bgOn) {
+            layer.background = { color: cfg.bgColor };
+        }
+        const symbol = {
+            type: "label-3d",
+            symbolLayers: [layer]
+        };
+        // 引导线标注：callout 把文字从点位「拉」出去一段距离
+        if (cfg.callout) {
+            symbol.verticalOffset = {
+                screenLength: 80,
+                maxWorldLength: 400,
+                minWorldLength: 60
+            };
+            symbol.callout = {
+                type: "line",
+                color: "#ffffff",
+                size: 1.5,
+                border: { color: "#003a8c" }
+            };
+        }
+        return symbol;
+    }
+
+    function rebuild() {
+        const symbol = buildSymbol();
+        glLabels.removeAll();
+        towers.forEach((t, i) => {
+            const label = i === 0 ? cfg.text : t.name;
+            glLabels.add(new Graphic({
+                geometry: new Point({ longitude: t.x, latitude: t.y, z: t.h + 30, spatialReference: { wkid: 4326 } }),
+                symbol: i === 0 ? symbol : {
+                    type: "label-3d",
+                    symbolLayers: [{
+                        type: "text",
+                        text: label,
+                        size: 12,
+                        material: { color: "#ffffff" },
+                        halo: { color: "#003a8c", size: 1.5 },
+                        background: { color: "#0d47a1" }
+                    }]
+                },
+                attributes: { OBJECTID: i + 1, NAME: t.name }
+            }));
+        });
+        setStatus("已更新 | 文字始终面向相机" + (cfg.callout ? "，引导线已开启" : ""));
+    }
+
+    function setStatus(msg) { document.getElementById("st").textContent = msg; }
+
+    document.getElementById("inpText").oninput = (e) => { cfg.text = e.target.value; rebuild(); };
+    document.getElementById("rngSize").oninput = (e) => {
+        cfg.size = Number(e.target.value);
+        document.getElementById("vSize").textContent = cfg.size;
+        rebuild();
+    };
+    document.getElementById("clrColor").oninput = (e) => { cfg.color = e.target.value; rebuild(); };
+    document.getElementById("clrHalo").oninput = (e) => { cfg.haloColor = e.target.value; rebuild(); };
+    document.getElementById("rngHalo").oninput = (e) => {
+        cfg.haloSize = Number(e.target.value);
+        document.getElementById("vHalo").textContent = cfg.haloSize;
+        rebuild();
+    };
+    document.getElementById("clrBg").oninput = (e) => { cfg.bgColor = e.target.value; rebuild(); };
+    document.getElementById("selHAlign").onchange = (e) => { cfg.hAlign = e.target.value; rebuild(); };
+    document.getElementById("btnBg").onclick = (e) => {
+        cfg.bgOn = !cfg.bgOn;
+        e.target.classList.toggle("active", cfg.bgOn);
+        rebuild();
+    };
+    document.getElementById("btnCallout").onclick = (e) => {
+        cfg.callout = !cfg.callout;
+        e.target.classList.toggle("active", cfg.callout);
+        rebuild();
+    };
+
+    await view.when();
+    rebuild();
+    // goTo 的目标是 Graphic 数组，图层/集合都不行
+    view.goTo([...glBuildings.graphics.toArray(), ...glLabels.graphics.toArray()], { duration: 1500 }).catch(() => {});
+    setStatus("TextSymbol3D 示例就绪 | 文字悬浮于楼顶，始终面向相机");
+</script>
+</body>
+</html>
